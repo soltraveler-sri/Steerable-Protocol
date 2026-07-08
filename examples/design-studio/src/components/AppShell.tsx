@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useDesignStudio } from "../state/designStore";
+import { SteeringPanel } from "./SteeringPanel";
 
 const navItems = [
   { to: "/", label: "Editor", end: true },
@@ -42,6 +43,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </aside>
         <main className="workspace-main">{children}</main>
+        <SteeringPanel />
       </div>
     </div>
   );

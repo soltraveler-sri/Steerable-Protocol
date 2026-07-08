@@ -147,7 +147,7 @@ label {
 
 .workspace {
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr);
+  grid-template-columns: 196px minmax(0, 1fr) minmax(300px, 360px);
   flex: 1;
 }
 
@@ -184,6 +184,231 @@ label {
 .workspace-main {
   min-width: 0;
   padding: 1.25rem;
+}
+
+.steering-panel {
+  display: grid;
+  align-content: start;
+  gap: 0.9rem;
+  min-width: 0;
+  max-height: calc(100vh - 84px);
+  border-left: 1px solid rgba(60, 51, 42, 0.14);
+  background: rgba(251, 248, 242, 0.82);
+  padding: 1rem;
+  position: sticky;
+  top: 84px;
+  overflow: auto;
+}
+
+.intent-form,
+.approval-card,
+.undo-toast,
+.route-notices,
+.activity-trail,
+.trail-record {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.intent-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.intent-form label {
+  min-width: 0;
+}
+
+.intent-form label span {
+  color: #344139;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.approval-card,
+.undo-toast,
+.route-notice,
+.trail-record {
+  border: 1px solid #d4ccbf;
+  border-radius: 8px;
+  background: rgba(255, 254, 250, 0.92);
+  padding: 0.85rem;
+}
+
+.approval-card h2 {
+  margin: 0;
+  color: #25352e;
+  font-size: 1rem;
+}
+
+.approval-card ul,
+.trail-record ol {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.approval-card li,
+.trail-step {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.approval-card li strong,
+.trail-step strong {
+  color: #1f2b24;
+  line-height: 1.2;
+}
+
+.approval-card li span,
+.trail-step span,
+.trail-header span,
+.route-notice span,
+.trail-record-head span {
+  color: #667166;
+  font-size: 0.82rem;
+}
+
+.approval-actions,
+.undo-toast,
+.undo-toast div,
+.trail-record-head,
+.trail-step,
+.trail-step > div,
+.trail-step-actions,
+.trail-header {
+  display: flex;
+  align-items: center;
+}
+
+.approval-actions,
+.undo-toast div,
+.trail-step-actions {
+  gap: 0.45rem;
+}
+
+.approval-actions {
+  justify-content: flex-end;
+}
+
+.undo-toast {
+  grid-template-columns: minmax(0, 1fr) auto;
+  background: #e5f3ef;
+  border-color: #bdd6cf;
+}
+
+.undo-toast > span {
+  color: #123f3a;
+  font-weight: 700;
+}
+
+.route-notice {
+  border-color: #cfd7de;
+}
+
+.route-notice.clarification {
+  border-color: #decf9b;
+  background: #fff9e8;
+}
+
+.route-notice.refusal-handoff {
+  border-color: #d7b7b5;
+  background: #fff0ef;
+}
+
+.route-notice p,
+.empty-trail {
+  margin: 0;
+  color: #4a554e;
+  font-size: 0.9rem;
+}
+
+.trail-header,
+.trail-record-head,
+.trail-step {
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.trail-record-head strong {
+  min-width: 0;
+  color: #1f2b24;
+  overflow-wrap: anywhere;
+}
+
+.trail-record-head span {
+  flex: 0 0 auto;
+  border: 1px solid #d8d0c4;
+  border-radius: 999px;
+  padding: 0.18rem 0.45rem;
+  background: #fbf8f2;
+}
+
+.trail-step {
+  border-top: 1px solid #ebe4d9;
+  padding-top: 0.55rem;
+}
+
+.trail-step:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.trail-step > div:first-child {
+  min-width: 0;
+  gap: 0.5rem;
+}
+
+.trail-step > div:first-child > div {
+  display: grid;
+  min-width: 0;
+}
+
+.status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #9aa59d;
+  flex: 0 0 auto;
+}
+
+.trail-step.running .status-dot {
+  background: #2563eb;
+}
+
+.trail-step.succeeded .status-dot {
+  background: #0f766e;
+}
+
+.trail-step.held .status-dot {
+  background: #b7791f;
+}
+
+.trail-step.failed .status-dot,
+.trail-step.canceled .status-dot {
+  background: #9f2a26;
+}
+
+.trail-step.undone .status-dot {
+  background: #667085;
+}
+
+.trail-step-actions {
+  flex: 0 0 auto;
+}
+
+.trail-step-actions button,
+.trail-undo-all,
+.undo-toast button,
+.approval-actions button {
+  min-height: 30px;
+  padding: 0.3rem 0.55rem;
+}
+
+.trail-undo-all {
+  justify-self: end;
 }
 
 .editor-grid {
@@ -677,6 +902,20 @@ label {
   color: #665b4e;
 }
 
+@media (max-width: 1280px) {
+  .workspace {
+    grid-template-columns: 176px minmax(0, 1fr);
+  }
+
+  .steering-panel {
+    grid-column: 1 / -1;
+    max-height: none;
+    border-top: 1px solid rgba(60, 51, 42, 0.14);
+    border-left: 0;
+    position: static;
+  }
+}
+
 @media (max-width: 1120px) {
   .editor-grid,
   .settings-grid {
@@ -723,6 +962,10 @@ label {
     justify-content: center;
   }
 
+  .steering-panel {
+    grid-column: auto;
+  }
+
   .workspace-main {
     padding: 0.8rem;
   }
@@ -758,7 +1001,9 @@ label {
 
 @media (max-width: 520px) {
   .preview-panel-header,
-  .color-control {
+  .color-control,
+  .intent-form,
+  .undo-toast {
     grid-template-columns: 1fr;
   }
 
