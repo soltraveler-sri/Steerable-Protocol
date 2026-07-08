@@ -26,9 +26,9 @@ import type {
   TypeScale,
 } from "../types";
 
-type SectionTextField = "eyebrow" | "title" | "body";
+export type SectionTextField = "eyebrow" | "title" | "body";
 
-type StoreEvent =
+export type DesignStoreEvent =
   | { type: "paletteTokenSet"; token: PaletteToken; value: string }
   | { type: "palettePresetApplied"; presetId: PalettePresetId }
   | { type: "fontPairingSet"; value: FontPairing }
@@ -46,7 +46,8 @@ type StoreEvent =
   | { type: "projectMetaUpdated"; field: keyof ProjectMeta; value: string }
   | { type: "shareMessageSet"; message: string }
   | { type: "projectExported" }
-  | { type: "projectReset" };
+  | { type: "projectReset" }
+  | { type: "stateRestored"; state: DesignState };
 
 export interface DesignSetters {
   setPaletteToken: (token: PaletteToken, value: string) => void;
@@ -62,6 +63,7 @@ export interface DesignSetters {
   copyShareLink: () => Promise<void>;
   exportProject: () => void;
   resetProject: () => void;
+  restoreState: (state: DesignState) => void;
 }
 
 interface DesignContextValue {
@@ -79,7 +81,7 @@ function cloneSections(sections: LandingSection[]): LandingSection[] {
   return sections.map((section) => ({ ...section }));
 }
 
-function createInitialState(): DesignState {
+export function createInitialDesignState(): DesignState {
   return {
     palette: clonePalette(defaultPalette),
     typography: { ...defaultTypography },
@@ -123,7 +125,10 @@ function applyTemplateState(state: DesignState, templateId: string): DesignState
   };
 }
 
-function reducer(state: DesignState, event: StoreEvent): DesignState {
+export function applyDesignStoreEvent(
+  state: DesignState,
+  event: DesignStoreEvent,
+): DesignState {
   switch (event.type) {
     case "paletteTokenSet":
       return {
@@ -249,7 +254,7 @@ function reducer(state: DesignState, event: StoreEvent): DesignState {
       };
     }
     case "projectReset": {
-      const initialState = createInitialState();
+      const initialState = createInitialDesignState();
 
       return {
         ...initialState,
@@ -259,13 +264,33 @@ function reducer(state: DesignState, event: StoreEvent): DesignState {
         },
       };
     }
+    case "stateRestored":
+      return {
+        ...event.state,
+        palette: clonePalette(event.state.palette),
+        typography: { ...event.state.typography },
+        sections: cloneSections(event.state.sections),
+        templates: event.state.templates.map((template) => ({
+          ...template,
+          palette: clonePalette(template.palette),
+          typography: { ...template.typography },
+          sections: cloneSections(template.sections),
+          metaPatch: { ...template.metaPatch },
+        })),
+        projectMeta: { ...event.state.projectMeta },
+        exportQuota: { ...event.state.exportQuota },
+      };
     default:
       return state;
   }
 }
 
 export function DesignProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, undefined, createInitialState);
+  const [state, dispatch] = useReducer(
+    applyDesignStoreEvent,
+    undefined,
+    createInitialDesignState,
+  );
 
   const copyShareLink = useCallback(async () => {
     const link = `${window.location.origin}/preview/${state.projectMeta.shareSlug}`;
@@ -313,6 +338,7 @@ export function DesignProvider({ children }: { children: ReactNode }) {
       copyShareLink,
       exportProject: () => dispatch({ type: "projectExported" }),
       resetProject: () => dispatch({ type: "projectReset" }),
+      restoreState: (state) => dispatch({ type: "stateRestored", state }),
     }),
     [copyShareLink],
   );

@@ -67,7 +67,7 @@ function paletteAction(): ActionDeclaration<{ hex: string }, { accent: string }>
 
 function typographyAction(): ActionDeclaration<{ value: string }, { value: string }> {
   return defineAction({
-    id: "typography.set_pairing",
+    id: "fixture.set_typography",
     title: "Set font pairing",
     description: "Set the local typography pairing.",
     params: valueSchema,
@@ -96,7 +96,7 @@ function typographyAction(): ActionDeclaration<{ value: string }, { value: strin
 
 function copyShareAction(): ActionDeclaration<{ value: string }, { copied: true }> {
   return defineAction({
-    id: "share.copy_link",
+    id: "fixture.copy_share",
     title: "Copy share link",
     description: "Copy a share link to the browser clipboard.",
     params: valueSchema,
@@ -264,8 +264,8 @@ describe("inline steerable proto-runtime", () => {
       posture: "creative-tool",
       steps: [
         { actionId: "palette.set_accent", params: { hex: "#123456" } },
-        { actionId: "share.copy_link", params: { value: "https://example.test" } },
-        { actionId: "typography.set_pairing", params: { value: "modern" } },
+        { actionId: "fixture.copy_share", params: { value: "https://example.test" } },
+        { actionId: "fixture.set_typography", params: { value: "modern" } },
       ],
     });
 
