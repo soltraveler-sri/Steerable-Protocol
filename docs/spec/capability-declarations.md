@@ -50,7 +50,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-031:** Mutation, navigation, side effects, remote writes, and destructive operations performed through Steerable Apps MUST occur only through declared action executors.
 - **SA-DECL-032:** Model output for an action MUST be treated as an untrusted proposal until it validates against the action declaration, registry availability, and policy.
 - **SA-DECL-033:** An action declaration MUST include these required fields: `id`, `title`, `description`, `params`, `reads`, `writes`, `risk`, `reversibility`, `effects`, `confirmation`, `preconditions`, `execute`, `guidance`, and `examples`.
-- **SA-DECL-034:** The optional action fields are `undo` and `observe`; omitting any required field is non-conformant.
+- **SA-DECL-034:** The optional action fields are `undo`, `observe`, and `externalExposure`; omitting any required field is non-conformant.
 - **SA-DECL-035:** `params` MUST be a strict typed schema for the executor inputs. An action with no inputs MUST declare an empty object schema rather than omit `params`.
 - **SA-DECL-036:** `reads` MUST list the state keys the action needs to inspect or rely on. An action with no state dependencies MUST declare an empty list rather than omit `reads`.
 - **SA-DECL-037:** `writes` MUST list the state keys the action can mutate or externally affect. An action that performs no mutation or side effect MUST declare an empty list rather than omit `writes`.
@@ -84,6 +84,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 | `effects` | Required | Non-conformant if omitted. |
 | `confirmation` | Required | Non-conformant if omitted. |
 | `preconditions` | Required | Use an empty list for globally available actions. |
+| `externalExposure` | Optional | Registry compilation materializes `none` if omitted. |
 | `execute` | Required | Non-conformant if omitted. |
 | `undo` | Optional | Required for `undoable`; snapshot-derived for `snapshot`; absent undo claim for `irreversible`. |
 | `observe` | Optional | No action-specific post-check if omitted. |
@@ -94,7 +95,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 
 - **SA-DECL-060:** A read tool declaration MUST describe one typed, side-effect-free query over application information.
 - **SA-DECL-061:** A read tool MUST NOT mutate state, perform user-visible product changes, spend quota or money, perform destructive operations, or depend on action risk machinery.
-- **SA-DECL-062:** A read tool declaration MUST include these required fields: `id`, `title`, `description`, `params`, `reads`, `preconditions`, `query`, `guidance`, and `examples`.
+- **SA-DECL-062:** A read tool declaration MUST include these required fields: `id`, `title`, `description`, `params`, `reads`, `preconditions`, `query`, `guidance`, and `examples`. The optional read tool field is `externalExposure`.
 - **SA-DECL-063:** A read tool declaration MUST NOT include `writes`, `risk`, `reversibility`, `effects`, `confirmation`, `execute`, or `undo`.
 - **SA-DECL-064:** `params` MUST be a strict typed schema for query inputs. A read tool with no inputs MUST declare an empty object schema rather than omit `params`.
 - **SA-DECL-065:** `reads` MUST list the state keys the query can inspect. A read tool with no state dependency MUST declare an empty list rather than omit `reads`.
@@ -111,6 +112,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 | `params` | Required | Use an empty object schema for no inputs. |
 | `reads` | Required | Use an empty list for no state dependencies. |
 | `preconditions` | Required | Use an empty list for globally available read tools. |
+| `externalExposure` | Optional | Registry compilation materializes `none` if omitted. |
 | `query` | Required | Non-conformant if omitted. |
 | `guidance` | Required | Non-conformant if omitted. |
 | `examples` | Required | Must contain at least one valid parameter example. |
@@ -159,8 +161,8 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 ## 9. Registry Model and Single Source of Truth (Normative)
 
 - **SA-DECL-090:** The registry MUST be the compiled output of action, read tool, facts, and surface declarations.
-- **SA-DECL-091:** The registry MUST be queryable at runtime for at least: all declared capabilities, capabilities live on a surface, capability schemas, capability preconditions, policy-relevant action metadata, and trusted executor entry points.
-- **SA-DECL-092:** The registry MUST preserve declaration IDs, state keys, schemas, titles, descriptions, guidance, examples, and surface scoping in a form usable by downstream policy, execution, context, ledger, documentation, evaluation, and external-bridge layers.
+- **SA-DECL-091:** The registry MUST be queryable at runtime for at least: all declared capabilities, capabilities live on a surface, capability schemas, capability preconditions, policy-relevant action metadata, external exposure metadata, and trusted executor entry points.
+- **SA-DECL-092:** The registry MUST preserve declaration IDs, state keys, schemas, titles, descriptions, guidance, examples, external exposure metadata, and surface scoping in a form usable by downstream policy, execution, context, ledger, documentation, evaluation, and external-bridge layers.
 - **SA-DECL-093:** If a fact about an action's meaning, schema, policy metadata, executor, undo semantics, UX label, guidance, examples, documentation source, eval source, or optional external exposure lives anywhere other than the action declaration or registry compiled from it, the integration is non-conformant.
 - **SA-DECL-094:** Door one and door two, when both are exposed, MUST derive their action and read tool surfaces from the same registry rather than separate declaration layers.
 - **SA-DECL-095:** A model-facing tool, prompt fragment, generated document, fixture, or external tool MUST NOT add, remove, or change declared action parameters, policy metadata, or executor semantics outside the declaration source.
@@ -176,10 +178,20 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-105:** Prompt guidance and few-shot examples MUST be derivable from declaration `guidance` and `examples`.
 - **SA-DECL-106:** Documentation pages for declared capabilities MUST be derivable from the registry without maintaining a second capability table.
 - **SA-DECL-107:** Evaluation fixtures for declared capability use MUST be derivable from the registry's schemas, examples, state keys, and policy metadata without maintaining a separate source of action truth.
-- **SA-DECL-108:** Optional external tools for door two MUST be generated from the same registry declarations used for door one.
+- **SA-DECL-108:** Optional external tools for door two MUST be generated from the same registry declarations used for door one and MUST honor declaration `externalExposure`.
 - **SA-DECL-109:** A runtime MAY choose different prompt assembly, documentation rendering, fixture generation, or bridge generation mechanics, but those mechanics MUST consume the registry rather than redefine capability facts.
 
-## 11. North-Star Action Example (Informative)
+## 11. Door-Two Declaration Addendum (Normative)
+
+- **SA-DECL-130:** Door-two addition (issue #9): Action and read tool declarations MAY include `externalExposure`; registry compilation MUST materialize an explicit external-exposure value for every action and read tool, defaulting omitted declarations to `none`, so door-two eligibility is always explicit in the registry source of truth.
+- **SA-DECL-131:** Door-two addition (issue #9): `externalExposure`, when declared, MUST be exactly one of `none` or `eligible`, and the registry-materialized value MUST be one of those two values.
+- **SA-DECL-132:** Door-two addition (issue #9): `externalExposure: none` MUST mean no conforming door-two generator emits an external tool for that capability.
+- **SA-DECL-133:** Door-two addition (issue #9): `externalExposure: eligible` MUST mean the declaration asserts the capability may be considered for door-two generation, but it MUST NOT by itself authorize generation, publication, invocation, or execution.
+- **SA-DECL-134:** Door-two addition (issue #9): `externalExposure` MUST describe only capability-level external eligibility and MUST NOT encode deployment enablement, caller identity, host allow-lists, session trust, autonomy mode, approval workflow, or other policy configuration.
+- **SA-DECL-135:** Door-two addition (issue #9): Registry compilation MUST preserve the materialized `externalExposure` value for every action and read tool (including the `none` default for omitted declarations) in a form usable by external-bridge generation and conformance checks.
+- **SA-DECL-136:** Door-two addition (issue #9): Door-two derivation MUST consume `externalExposure` from the registry and MUST NOT infer external eligibility from title, description, guidance, risk class, effects, or external-tool configuration.
+
+## 12. North-Star Action Example (Informative)
 
 The following example is reproduced from the north-star's core abstraction. It is conformant with this document because it declares a stable action ID, strict typed parameters, required state keys, policy metadata, confirmation posture, preconditions, trusted execution, optional undo and observe hooks, and model-facing guidance and examples.
 
@@ -224,8 +236,9 @@ Field-by-field conformance notes:
 5. `execute` is app-owned; model output can only propose its parameters.
 6. `undo` is present because `reversibility.kind` is `undoable`; `observe` is optional but present.
 7. `guidance` and `examples` provide the model-facing knowledge required to derive prompts and fixtures.
+8. `externalExposure` is omitted, so registry compilation materializes `none`: the action is not eligible for door-two generation unless the developer marks it `eligible`.
 
-## 12. Minimal Viable Declaration Example (Informative)
+## 13. Minimal Viable Declaration Example (Informative)
 
 This is the smallest honest action declaration shape: no inputs, no state dependencies, no side effects, no workflow assumptions, one trusted executor, and enough guidance/example material for generated prompts, docs, and fixtures.
 
@@ -249,7 +262,7 @@ defineAction({
 })
 ```
 
-## 13. Resolution Notes for This Declaration Document (Informative)
+## 14. Resolution Notes for This Declaration Document (Informative)
 
 The following issue-level decisions are recorded so later authors do not re-open them accidentally:
 
@@ -258,10 +271,11 @@ The following issue-level decisions are recorded so later authors do not re-open
 3. State key format is normative, but the taxonomy is developer-owned. This gives facts, read tools, fixtures, and capability queries stable handles without standardizing every product's domain model.
 4. Action IDs use stable lowercase namespaced IDs with a final `verb_noun` segment as the default requirement, because fixtures, ledgers, policy overrides, and generated external tools need durable references.
 5. `guidance` and `examples` are required declaration inputs; prompt assembly mechanics are runtime-specific, but model-facing knowledge must come from the declaration and registry.
+6. Door-two addition (issue #9): the declaration shape now includes optional `externalExposure` for actions and read tools because external eligibility is capability nature, while deployment enablement, caller identity, session trust, and autonomy outcomes remain policy inputs outside declarations. The field is optional with a registry-materialized `none` default (orchestrator adjustment): omission is the safe direction, the north-star §5 example remains conformant as written, and the meta-principle prefers a sane default over a mandatory field in every declaration.
 
 No conflict with the north-star was identified while writing this document.
 
-## 14. Framework Decides vs. Developer Decides (Normative)
+## 15. Framework Decides vs. Developer Decides (Normative)
 
 - **SA-DECL-120:** This declaration specification MUST preserve the framework/developer boundary in Table 1.
 
@@ -276,3 +290,4 @@ No conflict with the north-star was identified while writing this document.
 | **SA-DECL-127** | That surfaces scope live capabilities and register/deregister with the registry. | Which routes, views, modes, or access points count as surfaces in the product. |
 | **SA-DECL-128** | That the registry is the single source of truth for generated schemas, prompts, docs, fixtures, policy entries, execution availability, and optional external tools. | Whether door two is exposed, which docs or fixtures are published, and what product release bar applies above conformance. |
 | **SA-DECL-129** | That declarations carry inputs needed by policy, execution, context, ledger, and bridge specs without defining those downstream algorithms here. | The app's policy posture, execution UX, ledger retention, context escalation choices, and external-agent exposure policy. |
+| **SA-DECL-137** | Door-two addition (issue #9): That action and read tool declarations carry external exposure eligibility as registry metadata, defaulting to `none` when omitted. | Which capabilities are marked `eligible` (or left at the `none` default), and which policy configuration decides actual external availability. |
