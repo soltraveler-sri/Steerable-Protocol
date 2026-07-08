@@ -1,0 +1,67 @@
+fixtureFormatVersion: "0.1.0"
+kind: cross-surface
+id: sample.cross-surface.templates-success
+title: Navigate to templates and continue after readiness
+description: Sample cross-surface fixture for declared surface registration and capability readiness before continuation.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-EXEC-160
+  - SA-EXEC-164
+  - SA-EXEC-168
+  - SA-EXEC-169
+given:
+  startSurfaceId: editor
+  chain:
+    - stepId: navigate_templates
+      actionId: surface.navigate_templates
+      targetSurfaceId: templates
+      params: {}
+      requiresCapabilities:
+        - template.apply_landing
+      reversiblePrefix: true
+    - stepId: apply_landing
+      actionId: template.apply_landing
+      targetSurfaceId: templates
+      params:
+        templateId: saas-launch
+      requiresCapabilities: []
+      reversiblePrefix: true
+  registrationScenario:
+    targetSurfaceId: templates
+    timeoutMs: 5000
+    registersAtMs: 300
+    capabilitiesAvailableAtMs: 450
+    userNavigation: none
+expected:
+  negativeCase: none
+  sequence:
+    - kind: navigate
+      stepId: navigate_templates
+      actionId: surface.navigate_templates
+      surfaceId: templates
+    - kind: await-surface-registration
+      surfaceId: templates
+      timeoutMs: 5000
+    - kind: await-capabilities
+      surfaceId: templates
+      capabilityIds:
+        - template.apply_landing
+      timeoutMs: 5000
+    - kind: continue
+      stepId: apply_landing
+      actionId: template.apply_landing
+      surfaceId: templates
+  preservedUndoStepIds:
+    - navigate_templates
+    - apply_landing
+  notExecutedStepIds: []

@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "cross-surface.schema.json",
+  "title": "Steerable cross-surface eval fixture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fixtureFormatVersion",
+    "kind",
+    "id",
+    "title",
+    "description",
+    "authoredBy",
+    "authoredDate",
+    "target",
+    "sample",
+    "requirementRefs",
+    "given",
+    "expected"
+  ],
+  "properties": {
+    "fixtureFormatVersion": { "const": "0.1.0" },
+    "kind": { "const": "cross-surface" },
+    "id": { "$ref": "common.schema.json#/definitions/fixtureId" },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "authoredBy": { "type": "string", "minLength": 1 },
+    "authoredDate": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "target": { "$ref": "common.schema.json#/definitions/target" },
+    "sample": { "$ref": "common.schema.json#/definitions/sampleMarker" },
+    "requirementRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/definitions/requirementRef" }
+    },
+    "given": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["startSurfaceId", "chain", "registrationScenario"],
+      "properties": {
+        "startSurfaceId": { "$ref": "common.schema.json#/definitions/surfaceId" },
+        "chain": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stepId", "actionId", "targetSurfaceId"],
+            "properties": {
+              "stepId": { "$ref": "common.schema.json#/definitions/fixtureId" },
+              "actionId": { "$ref": "common.schema.json#/definitions/capabilityId" },
+              "targetSurfaceId": { "$ref": "common.schema.json#/definitions/surfaceId" },
+              "params": { "$ref": "common.schema.json#/definitions/jsonObject" },
+              "requiresCapabilities": {
+                "type": "array",
+                "items": { "$ref": "common.schema.json#/definitions/capabilityId" }
+              },
+              "reversiblePrefix": { "type": "boolean" }
+            }
+          }
+        },
+        "registrationScenario": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["targetSurfaceId", "timeoutMs"],
+          "properties": {
+            "targetSurfaceId": { "$ref": "common.schema.json#/definitions/surfaceId" },
+            "timeoutMs": { "type": "integer", "minimum": 1 },
+            "registersAtMs": { "type": "integer", "minimum": 0 },
+            "capabilitiesAvailableAtMs": { "type": "integer", "minimum": 0 },
+            "missingCapabilities": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/definitions/capabilityId" }
+            },
+            "userNavigation": {
+              "enum": ["none", "away-during-wait", "manual-target-before-timeout"]
+            }
+          }
+        },
+        "policyContext": { "$ref": "common.schema.json#/definitions/jsonObject" }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["negativeCase", "sequence"],
+      "properties": {
+        "negativeCase": { "$ref": "common.schema.json#/definitions/negativeCase" },
+        "sequence": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "enum": [
+                  "navigate",
+                  "await-surface-registration",
+                  "await-capabilities",
+                  "continue",
+                  "fail-timeout",
+                  "fail-capability-unavailable",
+                  "preserve-undo-prefix",
+                  "stop-suffix",
+                  "clarification",
+                  "refusal",
+                  "policy-denial",
+                  "undo-refusal"
+                ]
+              },
+              "stepId": { "$ref": "common.schema.json#/definitions/fixtureId" },
+              "actionId": { "$ref": "common.schema.json#/definitions/capabilityId" },
+              "surfaceId": { "$ref": "common.schema.json#/definitions/surfaceId" },
+              "capabilityIds": {
+                "type": "array",
+                "items": { "$ref": "common.schema.json#/definitions/capabilityId" }
+              },
+              "timeoutMs": { "type": "integer", "minimum": 1 }
+            }
+          }
+        },
+        "failure": { "$ref": "common.schema.json#/definitions/disclosure" },
+        "preservedUndoStepIds": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/definitions/fixtureId" }
+        },
+        "notExecutedStepIds": {
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/definitions/fixtureId" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "negativeCase": {
+                "enum": [
+                  "refusal",
+                  "policy-denial",
+                  "timeout-failure",
+                  "capability-unavailable",
+                  "undo-refusal"
+                ]
+              }
+            },
+            "required": ["negativeCase"]
+          },
+          "then": { "required": ["failure"] }
+        }
+      ]
+    }
+  }
+}

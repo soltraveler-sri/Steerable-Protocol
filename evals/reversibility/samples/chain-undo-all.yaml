@@ -1,0 +1,72 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: sample.reversibility.chain-undo-all
+title: Undo-all reverses executed prefix in reverse order
+description: Sample reversibility fixture for aggregate undo over a fully reversible executed scope.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-LED-110
+  - SA-LED-111
+  - SA-LED-112
+  - SA-LED-117
+given:
+  executed:
+    scope: chain
+    steps:
+      - stepId: set_brand_palette
+        actionId: palette.set_custom
+        status: succeeded
+        reversibilityKind: undoable
+        undoMechanism: declared_inverse
+        undoHandleStatus: available
+      - stepId: apply_landing
+        actionId: template.apply_landing
+        status: succeeded
+        reversibilityKind: snapshot
+        undoMechanism: runtime_snapshot
+        undoHandleStatus: available
+      - stepId: generate_directions
+        actionId: lab.generate_directions
+        status: held
+        reversibilityKind: snapshot
+        undoHandleStatus: unavailable
+    ledgerState:
+      approval.state: pending
+      heldSuffix.from: generate_directions
+  undoRequest:
+    scope: chain-executed-scope
+    targetStepIds:
+      - set_brand_palette
+      - apply_landing
+expected:
+  negativeCase: none
+  undoOutcome: undo-all-succeeded
+  order:
+    - apply_landing
+    - set_brand_palette
+  stepResults:
+    - stepId: apply_landing
+      result: snapshot-restored
+    - stepId: set_brand_palette
+      result: inverse-applied
+    - stepId: generate_directions
+      result: not-executed
+  disclosure:
+    reasonCode: suffix_not_executed
+    messageContains:
+      - held suffix never executed
+    requirementRefs:
+      - SA-LED-111
+  preserveLedgerFacts:
+    - held step is not represented as undone
+    - aggregate handle preserves per-step results

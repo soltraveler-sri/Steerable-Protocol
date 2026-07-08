@@ -1,0 +1,55 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: sample.policy.destructive-denied
+title: Sensitive posture refuses irreversible destructive work
+description: Sample negative fixture for a policy denial under the sensitive-domain preset.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-POL-080
+  - SA-POL-094
+  - SA-POL-095
+  - SA-POL-147
+given:
+  posturePreset: sensitive-domain
+  surfaceId: editor
+  sessionContext:
+    ledger.available: true
+    user.role: member
+  stickyGrants: []
+  proposed:
+    kind: action
+    steps:
+      - stepId: reset_workspace
+        actionId: workspace.reset_all
+        surfaceId: editor
+        params: {}
+expected:
+  negativeCase: policy-denial
+  chainMode: Refuse / hand off
+  steps:
+    - stepId: reset_workspace
+      actionId: workspace.reset_all
+      resolvedMode: Refuse / hand off
+      reasonCodes:
+        - destructive_irreversible_sensitive_domain
+  denial:
+    reasonCode: policy_denied
+    messageContains:
+      - cannot be automated
+      - manual recovery path
+    requirementRefs:
+      - SA-POL-094
+      - SA-POL-095
+  rationaleMustInclude:
+    - destructive irreversible action
+    - sensitive-domain preset

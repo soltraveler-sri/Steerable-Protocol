@@ -1,0 +1,70 @@
+fixtureFormatVersion: "0.1.0"
+kind: cross-surface
+id: sample.cross-surface.settings-timeout
+title: Destination registration timeout fails legibly
+description: Sample negative fixture for a bounded cross-surface wait timeout before continuation.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-EXEC-166
+  - SA-EXEC-167
+  - SA-EXEC-171
+  - SA-EXEC-173
+  - SA-EXEC-174
+given:
+  startSurfaceId: editor
+  chain:
+    - stepId: navigate_settings
+      actionId: surface.navigate_settings
+      targetSurfaceId: settings
+      params: {}
+      requiresCapabilities:
+        - workspace.set_theme
+      reversiblePrefix: true
+    - stepId: set_theme
+      actionId: workspace.set_theme
+      targetSurfaceId: settings
+      params:
+        theme: dark
+      requiresCapabilities: []
+      reversiblePrefix: true
+  registrationScenario:
+    targetSurfaceId: settings
+    timeoutMs: 5000
+    userNavigation: none
+expected:
+  negativeCase: timeout-failure
+  sequence:
+    - kind: navigate
+      stepId: navigate_settings
+      actionId: surface.navigate_settings
+      surfaceId: settings
+    - kind: await-surface-registration
+      surfaceId: settings
+      timeoutMs: 5000
+    - kind: fail-timeout
+      surfaceId: settings
+      timeoutMs: 5000
+    - kind: preserve-undo-prefix
+      stepId: navigate_settings
+  failure:
+    reasonCode: destination_timeout
+    messageContains:
+      - settings did not register
+      - remaining suffix not executed
+    requirementRefs:
+      - SA-EXEC-171
+      - SA-EXEC-174
+  preservedUndoStepIds:
+    - navigate_settings
+  notExecutedStepIds:
+    - set_theme
