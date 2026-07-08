@@ -16,9 +16,9 @@ steerable by wrapping the ordinary setters already present here.
 
 ## What This Is Not
 
-- No steering runtime.
-- No declarations, action registry, model calls, chat panel, intent router, or
-  backend.
+- No model calls, chat panel, intent router, or backend.
+- No steering UI yet; the capability registry is exercised by tests and the
+  inline proto-runtime.
 - No persistence beyond the in-memory session state.
 - Not a product-grade design tool.
 
@@ -40,9 +40,9 @@ npm run build
 
 ## Setter Inventory
 
-These are ordinary app setters and operations today. The risk and reversibility
-columns are anticipated Sprint-3 annotations only; there are no declarations in
-this shell.
+These are ordinary app setters and operations wrapped by the Sprint-3
+declarations. The risk and reversibility columns mirror the declaration
+metadata.
 
 | Setter / operation | Surface | Mutates | Risk | Reversibility | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -58,8 +58,48 @@ this shell.
 | `updateProjectMeta` | Settings | Name, audience, goal, tone, or share slug | `safe` | `undoable` | Previous field value is enough to undo. |
 | `copyShareLink` | Settings | Clipboard and share status message | `side_effect` | `irreversible` | Clipboard write affects the browser environment. |
 | `exportProject` | Editor, Settings | Fake daily export quota and export status | `mutating` | `irreversible` | Quota spend is intentionally not undone. |
-| `resetProject` | Settings | Design and metadata back to starter state | `destructive` | `snapshot` | Future runtime can snapshot the project before reset. |
+| `resetProject` | Settings | Design and metadata back to starter state | `destructive` | `snapshot` | Runtime snapshot can restore the local session. |
 
 Coverage: 13 operations total; risk classes: `safe` 10, `side_effect` 1,
 `mutating` 1, `destructive` 1; reversibility kinds: `undoable` 8,
 `snapshot` 3, `irreversible` 2.
+
+The declaration runtime also adds a non-UI `restoreState` setter so snapshot
+undo can restore captured composite state through trusted app code. It is not a
+user-facing operation or an action.
+
+## Capability Registry Coverage Matrix
+
+The source of truth for action semantics is
+`src/steerable/designStudioCapabilities.ts`; this matrix only maps spec
+coverage to declaration IDs.
+
+| Spec concept | Exercised by |
+| --- | --- |
+| Actions, 13 total | `palette.set_color`, `palette.apply_preset`, `typography.set_pairing`, `typography.set_scale`, `layout.set_hero`, `section.set_visibility`, `section.move_section`, `section.update_copy`, `template.apply_template`, `project.update_meta`, `share.copy_link`, `project.export_project`, `project.reset_project` |
+| `safe` risk | Palette, typography, layout, section, template, and metadata declarations |
+| `side_effect` risk | `share.copy_link` |
+| `mutating` risk plus `effects.cost: quota` | `project.export_project` |
+| `destructive` risk plus explicit confirmation | `project.reset_project` |
+| `undoable` reversibility | Single-token, typography, layout, section, and metadata setters with declared inverse handlers |
+| `snapshot` reversibility | `palette.apply_preset`, `template.apply_template`, `project.reset_project` |
+| `irreversible` reversibility | `share.copy_link`, `project.export_project` |
+| Read tools, 3 total | `design.get_current_design`, `template.list_available`, `quota.get_status` |
+| Facts | `editor.current_facts` has 12 facts, `templates.current_facts` has 11, `settings.current_facts` has 12 |
+| Surfaces, 3 total | `editor` (`/`), `templates` (`/templates`), `settings` (`/settings`) |
+| North-star §5 example | `palette.set_color` uses strict `{ token, hex }` params and the real palette setter |
+| Door-two default | Actions and read tools omit `externalExposure`; the registry materializes `none` |
+
+### State-Key Taxonomy
+
+State keys are developer-owned, stable, dot-separated identifiers rather than
+React paths: `ui.*` for route context, `design.*` for palette, typography,
+layout, sections, and template state, `project.*` for metadata, share status,
+and export quota, and `browser.*` for local browser side effects.
+
+### Redaction Policy
+
+No current Design Studio declaration accepts sensitive parameters. If a future
+declaration sets `effects.sensitive: true`, ledger and eval exports redact that
+action's entire params payload instead of attempting field-level partial
+redaction.
