@@ -1,0 +1,17 @@
+node_modules/
+.next/
+dist/
+build/
+target/
+.venv/
+__pycache__/
+coverage/
+.nyc_output/
+*.log
+.DS_Store
+*.whl
+*.gguf
+*.bin
+*.safetensors
+*.dylib
+*.node
