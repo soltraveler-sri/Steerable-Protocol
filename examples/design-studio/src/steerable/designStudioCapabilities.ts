@@ -13,6 +13,7 @@ import type {
   ProjectMeta,
   TypeScale,
 } from "../types";
+import type { PosturePreset } from "./policy";
 import {
   CapabilityRegistry,
   defineAction,
@@ -43,6 +44,7 @@ export type DesignStudioSurfaceId =
 
 export const designStudioStateKeys = {
   route: "ui.route",
+  posture: "policy.posture",
   palette: "design.palette",
   typography: "design.typography",
   heroLayout: "design.hero_layout",
@@ -63,6 +65,9 @@ export const designStudioRedactionPolicy =
 
 export interface DesignStudioCapabilityHost {
   getState: () => DesignState;
+  getPosture: () => PosturePreset;
+  setPosture: (posture: PosturePreset) => void;
+  navigateToSurface: (surfaceId: DesignStudioSurfaceId) => void;
   setters: DesignSetters;
   getOrigin?: () => string;
 }
@@ -115,10 +120,23 @@ interface ProjectUpdateMetaParams {
   value: string;
 }
 
+interface SurfaceNavigateParams {
+  surfaceId: DesignStudioSurfaceId;
+}
+
+interface PolicySetPostureParams {
+  posture: Extract<PosturePreset, "creative-tool" | "business-app">;
+}
+
 interface TemplateListParams {
   tone?: ProjectMeta["tone"];
 }
 
+const designStudioSurfaceIdList = [
+  "editor",
+  "templates",
+  "settings",
+] as const satisfies readonly DesignStudioSurfaceId[];
 const paletteTokens = [
   "background",
   "surface",
@@ -143,6 +161,10 @@ const projectMetaFields = [
 ] as const satisfies readonly (keyof ProjectMeta)[];
 const projectTones = ["warm", "direct", "premium"] as const satisfies readonly ProjectMeta["tone"][];
 const moveDirections = ["up", "down"] as const;
+const demoPostures = [
+  "creative-tool",
+  "business-app",
+] as const satisfies readonly Extract<PosturePreset, "creative-tool" | "business-app">[];
 
 const emptyObjectSchema: StrictParamSchema<EmptyParams> = {
   ...emptyParamsSchema,
@@ -282,6 +304,28 @@ const projectUpdateMetaParams = strictObjectSchema<ProjectUpdateMetaParams>(
   ["field", "value"],
 );
 
+const surfaceNavigateParams = strictObjectSchema<SurfaceNavigateParams>(
+  ["surfaceId"],
+  (input) => ({
+    surfaceId: parseEnum(input.surfaceId, designStudioSurfaceIdList, "surfaceId"),
+  }),
+  {
+    surfaceId: enumJsonSchema(designStudioSurfaceIdList),
+  },
+  ["surfaceId"],
+);
+
+const policySetPostureParams = strictObjectSchema<PolicySetPostureParams>(
+  ["posture"],
+  (input) => ({
+    posture: parseEnum(input.posture, demoPostures, "posture"),
+  }),
+  {
+    posture: enumJsonSchema(demoPostures),
+  },
+  ["posture"],
+);
+
 const templateListParams = strictObjectSchema<TemplateListParams>(
   ["tone"],
   (input) => {
@@ -352,6 +396,43 @@ function createDesignStudioActions(
   host: DesignStudioCapabilityHost,
 ): AnyActionDeclaration[] {
   return [
+    defineAction<SurfaceNavigateParams, { surfaceId: DesignStudioSurfaceId; previousSurfaceId: SurfaceId }>({
+      id: "surface.navigate_surface",
+      title: "Navigate to surface",
+      description: "Navigate to a declared Design Studio surface.",
+      params: surfaceNavigateParams,
+      reads: [designStudioStateKeys.route],
+      writes: [designStudioStateKeys.route],
+      risk: "safe",
+      reversibility: { kind: "undoable" },
+      effects: { external: false, cost: "none", sensitive: false },
+      confirmation: "never",
+      preconditions: [],
+      execute: ({ surfaceId }, context) => {
+        const previousSurfaceId = context.surfaceId;
+
+        host.navigateToSurface(surfaceId);
+        return { surfaceId, previousSurfaceId };
+      },
+      undo: ({ result }) => {
+        const previousSurfaceId = result?.previousSurfaceId;
+
+        if (!isDesignStudioSurfaceId(previousSurfaceId)) {
+          throw new Error("Navigation undo requires a previous Design Studio surface.");
+        }
+
+        host.navigateToSurface(previousSurfaceId);
+        return { surfaceId: previousSurfaceId };
+      },
+      guidance:
+        "Use inside a cross-surface chain when the next declared action lives on a different Design Studio surface. In-app route changes are local, safe, and undoable through ordinary navigation.",
+      examples: [
+        {
+          user: "open settings",
+          params: { surfaceId: "settings" },
+        },
+      ],
+    }),
     defineAction<PaletteSetColorParams, { token: PaletteToken; hex: string; previousHex: string }>({
       id: "palette.set_color",
       title: "Set one palette color",
@@ -734,6 +815,45 @@ function createDesignStudioActions(
         },
       ],
     }),
+    defineAction<PolicySetPostureParams, { posture: PosturePreset; previousPosture: PosturePreset }>({
+      id: "policy.set_posture",
+      title: "Set steering posture",
+      description: "Switch the Design Studio steering posture.",
+      params: policySetPostureParams,
+      reads: [designStudioStateKeys.posture],
+      writes: [designStudioStateKeys.posture],
+      risk: "safe",
+      reversibility: { kind: "undoable" },
+      effects: { external: false, cost: "none", sensitive: false },
+      confirmation: "never",
+      preconditions: [surfacePrecondition(designStudioSurfaceIds.settings)],
+      execute: ({ posture }) => {
+        const previousPosture = host.getPosture();
+
+        host.setPosture(posture);
+        return { posture, previousPosture };
+      },
+      undo: ({ result }) => {
+        if (!result?.previousPosture) {
+          throw new Error("Posture undo requires the previous posture.");
+        }
+
+        host.setPosture(result.previousPosture);
+        return { posture: result.previousPosture };
+      },
+      guidance:
+        "Use when the user changes the runtime posture between the default creative tool and the cautious business-app policy preset.",
+      examples: [
+        {
+          user: "switch posture to cautious",
+          params: { posture: "business-app" },
+        },
+        {
+          user: "switch posture to creative tool",
+          params: { posture: "creative-tool" },
+        },
+      ],
+    }),
     defineAction<EmptyParams, { link: string }>({
       id: "share.copy_link",
       title: "Copy share link",
@@ -929,9 +1049,9 @@ function createDesignStudioFacts(host: DesignStudioCapabilityHost) {
         fact("design.sections.order", "All section IDs in page order.", stringArraySchema()),
         fact("design.template.active_id", "The active template ID.", { type: "string" }),
         fact("quota.exports_remaining", "Remaining fake exports this session.", { type: "number" }),
-        fact("policy.posture", "Default example posture for policy fixtures.", { type: "string" }),
+        fact("policy.posture", "Current example posture preset.", { type: "string" }),
       ],
-      publish: () => editorFacts(host.getState()),
+      publish: () => editorFacts(host),
       update: "material_change",
     }),
     defineFacts({
@@ -950,9 +1070,9 @@ function createDesignStudioFacts(host: DesignStudioCapabilityHost) {
         fact("design.typography.summary", "Current typography choices.", typographySummarySchema()),
         fact("design.hero_layout", "Current hero layout.", enumJsonSchema(heroLayouts)),
         fact("quota.exports_remaining", "Remaining fake exports this session.", { type: "number" }),
-        fact("policy.posture", "Default example posture for policy fixtures.", { type: "string" }),
+        fact("policy.posture", "Current example posture preset.", { type: "string" }),
       ],
-      publish: () => templatesFacts(host.getState()),
+      publish: () => templatesFacts(host),
       update: "material_change",
     }),
     defineFacts({
@@ -972,7 +1092,7 @@ function createDesignStudioFacts(host: DesignStudioCapabilityHost) {
         fact("quota.limit", "Fake export quota limit for this session.", { type: "number" }),
         fact("quota.last_exported_at", "Last mock export time, if any.", nullableStringSchema()),
         fact("share.status", "Current share-link status message.", { type: "string" }),
-        fact("policy.posture", "Default example posture for policy fixtures.", { type: "string" }),
+        fact("policy.posture", "Current example posture preset.", { type: "string" }),
       ],
       publish: () => settingsFacts(host),
       update: "material_change",
@@ -1013,6 +1133,7 @@ function createDesignStudioSurfaces(ids: {
       title: "Editor",
       description: "Brand kit, section, layout, and live preview editing surface.",
       capabilities: [
+        action("surface.navigate_surface"),
         action("palette.set_color"),
         action("palette.apply_preset"),
         action("typography.set_pairing"),
@@ -1033,6 +1154,7 @@ function createDesignStudioSurfaces(ids: {
       title: "Templates",
       description: "Starting direction gallery for applying complete template states.",
       capabilities: [
+        action("surface.navigate_surface"),
         action("template.apply_template"),
         readTool("design.get_current_design"),
         readTool("template.list_available"),
@@ -1045,6 +1167,8 @@ function createDesignStudioSurfaces(ids: {
       title: "Settings",
       description: "Project metadata, share link, export quota, and reset operations surface.",
       capabilities: [
+        action("surface.navigate_surface"),
+        action("policy.set_posture"),
         action("project.update_meta"),
         action("share.copy_link"),
         action("project.export_project"),
@@ -1135,6 +1259,13 @@ function parseEnum<const Values extends readonly string[]>(
   }
 
   return value;
+}
+
+function isDesignStudioSurfaceId(value: unknown): value is DesignStudioSurfaceId {
+  return (
+    typeof value === "string" &&
+    (designStudioSurfaceIdList as readonly string[]).includes(value)
+  );
 }
 
 function enumJsonSchema(values: readonly string[]) {
@@ -1273,7 +1404,9 @@ function summarizeQuota(state: DesignState) {
   };
 }
 
-function editorFacts(state: DesignState) {
+function editorFacts(host: DesignStudioCapabilityHost) {
+  const state = host.getState();
+
   return {
     "ui.route": "/",
     "project.name": state.projectMeta.name,
@@ -1288,11 +1421,13 @@ function editorFacts(state: DesignState) {
     "design.sections.order": state.sections.map((section) => section.id),
     "design.template.active_id": state.activeTemplateId,
     "quota.exports_remaining": state.exportQuota.remaining,
-    "policy.posture": "creative-tool",
+    "policy.posture": host.getPosture(),
   };
 }
 
-function templatesFacts(state: DesignState) {
+function templatesFacts(host: DesignStudioCapabilityHost) {
+  const state = host.getState();
+
   return {
     "ui.route": "/templates",
     "template.active_id": state.activeTemplateId,
@@ -1304,7 +1439,7 @@ function templatesFacts(state: DesignState) {
     "design.typography.summary": { ...state.typography },
     "design.hero_layout": state.heroLayout,
     "quota.exports_remaining": state.exportQuota.remaining,
-    "policy.posture": "creative-tool",
+    "policy.posture": host.getPosture(),
   };
 }
 
@@ -1323,7 +1458,7 @@ function settingsFacts(host: DesignStudioCapabilityHost) {
     "quota.limit": state.exportQuota.limit,
     "quota.last_exported_at": state.exportQuota.lastExportedAt,
     "share.status": state.shareMessage,
-    "policy.posture": "creative-tool",
+    "policy.posture": host.getPosture(),
   };
 }
 

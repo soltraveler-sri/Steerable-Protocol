@@ -242,6 +242,7 @@ label {
 }
 
 .approval-card ul,
+.plan-preview-card ol,
 .trail-record ol {
   display: grid;
   gap: 0.55rem;
@@ -254,6 +255,18 @@ label {
 .trail-step {
   display: grid;
   gap: 0.3rem;
+}
+
+.plan-preview-card li {
+  display: grid;
+  gap: 0.45rem;
+  border-top: 1px solid #ebe4d9;
+  padding-top: 0.55rem;
+}
+
+.plan-preview-card li:first-child {
+  border-top: 0;
+  padding-top: 0;
 }
 
 .approval-card li strong,
@@ -269,6 +282,23 @@ label {
 .trail-record-head span {
   color: #667166;
   font-size: 0.82rem;
+}
+
+.risk-badges,
+.trail-disclosures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.risk-badges span {
+  border: 1px solid #d8d0c4;
+  border-radius: 999px;
+  background: #fbf8f2;
+  color: #4a554e;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.12rem 0.4rem;
 }
 
 .approval-actions,
@@ -397,6 +427,18 @@ label {
 
 .trail-step-actions {
   flex: 0 0 auto;
+}
+
+.trail-disclosures {
+  margin: 0;
+  padding: 0.55rem 0 0;
+  border-top: 1px solid #ebe4d9;
+  list-style: none;
+}
+
+.trail-disclosures li {
+  color: #4a554e;
+  font-size: 0.82rem;
 }
 
 .trail-step-actions button,

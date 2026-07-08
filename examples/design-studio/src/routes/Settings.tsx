@@ -1,4 +1,5 @@
 import { useDesignStudio } from "../state/designStore";
+import { useSteering } from "../steerable/SteeringContext";
 import type { ProjectMeta } from "../types";
 
 const tones: Array<{ value: ProjectMeta["tone"]; label: string }> = [
@@ -9,6 +10,7 @@ const tones: Array<{ value: ProjectMeta["tone"]; label: string }> = [
 
 export function Settings() {
   const { state, setters } = useDesignStudio();
+  const { posture, submitIntent, isSubmitting } = useSteering();
 
   return (
     <div className="settings-grid">
@@ -64,6 +66,28 @@ export function Settings() {
                 {tone.label}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div>
+          <span className="field-label">Steering posture</span>
+          <div className="segmented" aria-label="Steering posture">
+            <button
+              type="button"
+              className={posture === "creative-tool" ? "selected" : ""}
+              disabled={isSubmitting || posture === "creative-tool"}
+              onClick={() => void submitIntent("switch posture to creative tool")}
+            >
+              Creative
+            </button>
+            <button
+              type="button"
+              className={posture === "business-app" ? "selected" : ""}
+              disabled={isSubmitting || posture === "business-app"}
+              onClick={() => void submitIntent("switch posture to cautious")}
+            >
+              Cautious
+            </button>
           </div>
         </div>
       </section>

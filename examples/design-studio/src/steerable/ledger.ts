@@ -100,6 +100,8 @@ export interface DisclosureRecord {
   kind:
     | "partial_undo"
     | "no_undo"
+    | "cross_surface_wait"
+    | "cross_surface_continue"
     | "cross_surface_failure"
     | "held_suffix"
     | "redaction"

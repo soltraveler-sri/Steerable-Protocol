@@ -1,6 +1,8 @@
 import { FormEvent, useState } from "react";
 import { useSteering } from "../steerable/SteeringContext";
 import type { SteeringInvocationRecord, StepStatus } from "../steerable/ledger";
+import type { ApprovalRequest } from "../steerable/execution";
+import type { DeclarationPolicyMetadata } from "../steerable/policy";
 import {
   canUndoStep,
   trailDescriptionForStep,
@@ -67,29 +69,19 @@ export function SteeringPanel() {
       </form>
 
       {pendingApproval ? (
-        <section className="approval-card" aria-label="Pending approval">
-          <div>
-            <p className="eyebrow">Approval</p>
-            <h2>{pendingApproval.mode}</h2>
-          </div>
-          <ul>
-            {pendingApproval.heldSteps.map((step) => (
-              <li key={step.stepId}>
-                <strong>{step.title}</strong>
-                <span>{step.description}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="status-line">{pendingApproval.undoImplications}</p>
-          <div className="approval-actions">
-            <button type="button" className="primary" onClick={approvePending}>
-              Apply
-            </button>
-            <button type="button" onClick={declinePending}>
-              Decline
-            </button>
-          </div>
-        </section>
+        pendingApproval.mode === "Plan preview" ? (
+          <PlanPreviewCard
+            request={pendingApproval}
+            onApply={approvePending}
+            onDecline={declinePending}
+          />
+        ) : (
+          <ApprovalCard
+            request={pendingApproval}
+            onApply={approvePending}
+            onDecline={declinePending}
+          />
+        )
       ) : null}
 
       {undoToast ? (
@@ -185,6 +177,13 @@ function TrailRecord({
           </li>
         ))}
       </ol>
+      {record.disclosures.length > 0 ? (
+        <ul className="trail-disclosures" aria-label="Execution disclosures">
+          {record.disclosures.map((disclosure) => (
+            <li key={disclosure.disclosureId}>{disclosure.message}</li>
+          ))}
+        </ul>
+      ) : null}
       {record.steps.length > 1 && canUndoAll ? (
         <button type="button" className="trail-undo-all" onClick={() => onUndoAll(record.recordId)}>
           Undo all
@@ -192,4 +191,109 @@ function TrailRecord({
       ) : null}
     </article>
   );
+}
+
+function ApprovalCard({
+  request,
+  onApply,
+  onDecline,
+}: {
+  request: ApprovalRequest;
+  onApply: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <section className="approval-card" aria-label="Pending approval">
+      <div>
+        <p className="eyebrow">Approval</p>
+        <h2>{request.mode}</h2>
+      </div>
+      <ul>
+        {request.heldSteps.map((step) => (
+          <li key={step.stepId}>
+            <strong>{step.title}</strong>
+            <span>{step.description}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="status-line">{request.undoImplications}</p>
+      <div className="approval-actions">
+        <button type="button" className="primary" onClick={onApply}>
+          Apply
+        </button>
+        <button type="button" onClick={onDecline}>
+          Decline
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function PlanPreviewCard({
+  request,
+  onApply,
+  onDecline,
+}: {
+  request: ApprovalRequest;
+  onApply: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <section className="approval-card plan-preview-card" aria-label="Plan preview">
+      <div>
+        <p className="eyebrow">Plan preview</p>
+        <h2>{request.heldSteps.length} steps</h2>
+      </div>
+      <ol>
+        {request.heldSteps.map((step) => (
+          <li key={step.stepId}>
+            <div>
+              <strong>{step.title}</strong>
+              <span>{step.description}</span>
+            </div>
+            <RiskBadges metadata={metadataForStep(request.materialEffects, step.actionId)} />
+          </li>
+        ))}
+      </ol>
+      <p className="status-line">{request.undoImplications}</p>
+      <div className="approval-actions">
+        <button type="button" className="primary" onClick={onApply}>
+          Apply
+        </button>
+        <button type="button" onClick={onDecline}>
+          Decline
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function RiskBadges({ metadata }: { metadata?: DeclarationPolicyMetadata }) {
+  if (!metadata) {
+    return null;
+  }
+
+  const badges = [
+    metadata.risk,
+    metadata.reversibility,
+    metadata.effects.cost !== "none" ? `cost:${metadata.effects.cost}` : undefined,
+    metadata.effects.external ? "external" : undefined,
+    metadata.effects.sensitive ? "sensitive" : undefined,
+    metadata.confirmation === "always" ? "confirm" : undefined,
+  ].filter((badge): badge is string => Boolean(badge));
+
+  return (
+    <div className="risk-badges" aria-label="Declaration badges">
+      {badges.map((badge) => (
+        <span key={badge}>{badge}</span>
+      ))}
+    </div>
+  );
+}
+
+function metadataForStep(
+  metadata: DeclarationPolicyMetadata[],
+  actionId: string,
+): DeclarationPolicyMetadata | undefined {
+  return metadata.find((item) => item.actionId === actionId);
 }

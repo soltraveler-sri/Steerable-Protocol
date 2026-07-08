@@ -9,11 +9,12 @@ import {
   type MutableRefObject,
   type ReactNode,
 } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import type { DesignSetters } from "../state/designStore";
 import { useDesignStudio } from "../state/designStore";
 import type { DesignState } from "../types";
 import {
+  DEFAULT_SURFACE_READINESS_TIMEOUT_MS,
   ExecutionEngine,
   type ApprovalDecision,
   type ApprovalHook,
@@ -21,6 +22,7 @@ import {
   type ChainExecutionRun,
 } from "./execution";
 import { InMemoryLedger, type SteeringInvocationRecord } from "./ledger";
+import type { PosturePreset } from "./policy";
 import { ScriptedIntentRouter, type IntentRoute } from "./router";
 import {
   createDesignStudioRegistry,
@@ -59,6 +61,7 @@ interface SteeringContextValue {
   records: SteeringInvocationRecord[];
   notices: SteeringNotice[];
   pendingApproval: ApprovalRequest | null;
+  posture: PosturePreset;
   undoToast: UndoToast | null;
   isSubmitting: boolean;
   submitIntent: (intent: string) => Promise<void>;
@@ -74,10 +77,14 @@ const SteeringContext = createContext<SteeringContextValue | null>(null);
 export function SteeringProvider({ children }: { children: ReactNode }) {
   const { state, setters } = useDesignStudio();
   const location = useLocation();
+  const navigate = useNavigate();
   const stateRef = useRef(state);
   const settersRef = useRef(setters);
+  const navigateRef = useRef(navigate);
   const currentSurfaceId = surfaceIdForPath(location.pathname);
   const currentSurfaceIdRef = useRef<DesignStudioSurfaceId>(currentSurfaceId);
+  const [posture, setPosture] = useState<PosturePreset>("creative-tool");
+  const postureRef = useRef<PosturePreset>(posture);
   const approvalResolveRef = useRef<((decision: ApprovalDecision) => void) | null>(null);
   const runsRef = useRef(new Map<string, ChainExecutionRun>());
   const hostRef = useRef<DesignStudioCapabilityHost | null>(null);
@@ -90,7 +97,9 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
 
   stateRef.current = state;
   settersRef.current = setters;
+  navigateRef.current = navigate;
   currentSurfaceIdRef.current = currentSurfaceId;
+  postureRef.current = posture;
 
   const approvalHook = useCallback<ApprovalHook>((request) => {
     return new Promise((resolve) => {
@@ -115,6 +124,13 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
   if (!hostRef.current) {
     hostRef.current = {
       getState: () => stateRef.current,
+      getPosture: () => postureRef.current,
+      setPosture,
+      navigateToSurface: (surfaceId) => {
+        const search = typeof window === "undefined" ? "" : window.location.search;
+
+        navigateRef.current(`${surfacePathForId(surfaceId)}${search}`);
+      },
       setters: createSetterProxy(settersRef),
       getOrigin: () =>
         typeof window === "undefined" ? "https://design-studio.local" : window.location.origin,
@@ -123,11 +139,6 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
 
   if (!runtimeRef.current) {
     const registry = createDesignStudioRegistry(hostRef.current);
-
-    Object.values(designStudioSurfaceIds).forEach((surfaceId) => {
-      registry.registerSurface(surfaceId);
-    });
-
     const ledger = new InMemoryLedger();
     const snapshotStore = createDesignStudioSnapshotAdapter(hostRef.current);
     const engine = new ExecutionEngine({
@@ -156,6 +167,33 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
   }, [runtime]);
 
   useEffect(() => runtime.ledger.subscribe(refreshRecords), [runtime, refreshRecords]);
+
+  useEffect(() => {
+    let disposed = false;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const delayMs = surfaceRegistrationDelayMs(currentSurfaceId, location.search);
+    const register = () => {
+      if (!disposed) {
+        runtime.registry.registerSurface(currentSurfaceId);
+      }
+    };
+
+    if (delayMs > 0) {
+      timeout = setTimeout(register, delayMs);
+    } else {
+      register();
+    }
+
+    return () => {
+      disposed = true;
+
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+
+      runtime.registry.deregisterSurface(currentSurfaceId);
+    };
+  }, [currentSurfaceId, location.search, runtime.registry]);
 
   const submitIntent = useCallback(
     async (intent: string) => {
@@ -193,7 +231,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
         const run = runtime.engine.executeChain({
           intent: trimmed,
           surfaceId: currentSurfaceIdRef.current,
-          posture: "creative-tool",
+          posture: postureRef.current,
           steps: route.steps.map((step) => ({
             actionId: step.actionId,
             params: step.params,
@@ -308,6 +346,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
       records,
       notices,
       pendingApproval,
+      posture,
       undoToast,
       isSubmitting,
       submitIntent,
@@ -324,6 +363,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
       isSubmitting,
       notices,
       pendingApproval,
+      posture,
       records,
       runtime.registry,
       submitIntent,
@@ -394,4 +434,39 @@ function surfaceIdForPath(pathname: string): DesignStudioSurfaceId {
   }
 
   return designStudioSurfaceIds.editor;
+}
+
+function surfacePathForId(surfaceId: DesignStudioSurfaceId): string {
+  if (surfaceId === designStudioSurfaceIds.templates) {
+    return "/templates";
+  }
+
+  if (surfaceId === designStudioSurfaceIds.settings) {
+    return "/settings";
+  }
+
+  return "/";
+}
+
+function surfaceRegistrationDelayMs(
+  surfaceId: DesignStudioSurfaceId,
+  search: string,
+): number {
+  if (!import.meta.env.DEV) {
+    return 0;
+  }
+
+  const params = new URLSearchParams(search);
+
+  if (params.get("steerableDelaySurface") !== surfaceId) {
+    return 0;
+  }
+
+  const explicitDelay = Number(params.get("steerableSurfaceDelayMs"));
+
+  if (Number.isFinite(explicitDelay) && explicitDelay >= 0) {
+    return explicitDelay;
+  }
+
+  return DEFAULT_SURFACE_READINESS_TIMEOUT_MS + 500;
 }
