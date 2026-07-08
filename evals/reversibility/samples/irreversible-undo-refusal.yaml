@@ -1,0 +1,60 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: sample.reversibility.irreversible-undo-refusal
+title: Irreversible action refuses undo with disclosure
+description: Sample negative fixture for an honest irreversible action with no claimed undo handle.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-LED-086
+  - SA-LED-087
+  - SA-LED-113
+  - SA-LED-114
+given:
+  executed:
+    scope: single-action
+    steps:
+      - stepId: publish_site
+        actionId: publish.push_live
+        status: succeeded
+        reversibilityKind: irreversible
+        undoMechanism: honest_irreversible
+        undoHandleStatus: not_claimed
+        noUndoReason: Publishing has already affected an external live endpoint.
+  undoRequest:
+    scope: single-step
+    targetStepIds:
+      - publish_site
+expected:
+  negativeCase: undo-refusal
+  undoOutcome: refused-with-disclosure
+  stepResults:
+    - stepId: publish_site
+      result: not-undoable
+      disclosure:
+        reasonCode: honest_irreversible
+        messageContains:
+          - cannot undo
+          - already affected an external live endpoint
+        requirementRefs:
+          - SA-LED-086
+  disclosure:
+    reasonCode: honest_irreversible
+    messageContains:
+      - no undo handle is claimed
+      - use the product recovery path
+    requirementRefs:
+      - SA-LED-086
+      - SA-LED-087
+  preserveLedgerFacts:
+    - undo refusal recorded as an undo attempt
+    - no stale undo affordance remains visible

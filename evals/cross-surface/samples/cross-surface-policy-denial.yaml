@@ -1,0 +1,69 @@
+fixtureFormatVersion: "0.1.0"
+kind: cross-surface
+id: sample.cross-surface.policy-denial
+title: Cross-surface chain stops before denied destination action
+description: Sample negative fixture for a policy-denied step in a cross-surface chain.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-EXEC-046
+  - SA-EXEC-047
+  - SA-EXEC-173
+  - SA-POL-095
+given:
+  startSurfaceId: editor
+  chain:
+    - stepId: navigate_settings
+      actionId: surface.navigate_settings
+      targetSurfaceId: settings
+      params: {}
+      requiresCapabilities:
+        - workspace.reset_all
+      reversiblePrefix: true
+    - stepId: reset_workspace
+      actionId: workspace.reset_all
+      targetSurfaceId: settings
+      params: {}
+      requiresCapabilities: []
+      reversiblePrefix: false
+  registrationScenario:
+    targetSurfaceId: settings
+    timeoutMs: 5000
+    registersAtMs: 200
+    capabilitiesAvailableAtMs: 300
+    userNavigation: none
+  policyContext:
+    posturePreset: sensitive-domain
+    user.role: member
+expected:
+  negativeCase: policy-denial
+  sequence:
+    - kind: policy-denial
+      stepId: reset_workspace
+      actionId: workspace.reset_all
+      surfaceId: settings
+    - kind: stop-suffix
+      stepId: reset_workspace
+    - kind: preserve-undo-prefix
+      stepId: navigate_settings
+  failure:
+    reasonCode: policy_denied
+    messageContains:
+      - reset_workspace refused before execution
+      - reversible prefix undo remains available
+    requirementRefs:
+      - SA-EXEC-046
+      - SA-POL-095
+  preservedUndoStepIds:
+    - navigate_settings
+  notExecutedStepIds:
+    - reset_workspace

@@ -1,0 +1,37 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: sample.intent.missing-target-clarification
+title: Ambiguous edit asks a clarification
+description: Sample fixture for missing target information that cannot be inferred safely.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-023
+  - SA-EXEC-029
+given:
+  surfaceId: editor
+  utterance: "make it more on brand"
+  posturePreset: creative-tool
+  facts:
+    selection.kind: none
+    design.brandPalette.available: false
+expected:
+  routeClass: clarification
+  negativeCase: clarification
+  clarification:
+    missing:
+      - field: target_object
+        reason: The utterance does not identify which design region, token, or template should change.
+      - field: desired_brand_values
+        reason: No brand palette or selected brand reference is available in facts.
+  escalationReason: Missing target and desired values cannot be safely inferred under SA-EXEC-029.

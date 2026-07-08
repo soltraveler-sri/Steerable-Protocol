@@ -1,0 +1,48 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: sample.reversibility.inverse-single-action
+title: Single undoable action applies declared inverse
+description: Sample reversibility fixture for an available declared inverse undo handle.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-LED-070
+  - SA-LED-080
+  - SA-LED-081
+given:
+  executed:
+    scope: single-action
+    steps:
+      - stepId: set_accent
+        actionId: palette.set_color
+        params:
+          token: accent
+          hex: "#0F766E"
+        status: succeeded
+        reversibilityKind: undoable
+        undoMechanism: declared_inverse
+        undoHandleStatus: available
+  undoRequest:
+    scope: single-step
+    targetStepIds:
+      - set_accent
+expected:
+  negativeCase: none
+  undoOutcome: inverse-applied
+  order:
+    - set_accent
+  stepResults:
+    - stepId: set_accent
+      result: inverse-applied
+  preserveLedgerFacts:
+    - undo attempt recorded with target handle
+    - step status becomes undone only after inverse succeeds

@@ -1,0 +1,43 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: sample.intent.set-accent-single-action
+title: Set accent color routes to one action
+description: Sample fixture for a safe direct color change with case-insensitive hex tolerance.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-022
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "make the accent #0f766e"
+  posturePreset: creative-tool
+  facts:
+    design.palette.accent: "#2563EB"
+    selection.kind: palette-token
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - stepId: set_accent
+      actionId: palette.set_color
+      surfaceId: editor
+      params:
+        allowExtra: false
+        fields:
+          token:
+            kind: exact
+            value: accent
+          hex:
+            kind: caseInsensitive
+            value: "#0F766E"

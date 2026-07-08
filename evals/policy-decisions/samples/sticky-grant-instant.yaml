@@ -1,0 +1,52 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: sample.policy.sticky-grant-instant
+title: Scoped grant allows a non-destructive action
+description: Sample policy fixture for a scoped grant that preserves instant execution for a safe action.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-POL-084
+  - SA-POL-126
+  - SA-POL-133
+given:
+  posturePreset: creative-tool
+  surfaceId: editor
+  sessionContext:
+    ledger.available: true
+  stickyGrants:
+    - grantId: grant_palette_session
+      subject: action:palette.set_color
+      effect: Instant execution
+      expires: session
+  proposed:
+    kind: action
+    steps:
+      - stepId: set_accent
+        actionId: palette.set_color
+        surfaceId: editor
+        params:
+          token: accent
+          hex: "#0F766E"
+expected:
+  negativeCase: none
+  chainMode: Instant execution
+  steps:
+    - stepId: set_accent
+      actionId: palette.set_color
+      resolvedMode: Instant execution
+      reasonCodes:
+        - clean_safe_reversible
+        - scoped_grant_applies
+  rationaleMustInclude:
+    - grant grant_palette_session used
+    - declaration remains source of action metadata

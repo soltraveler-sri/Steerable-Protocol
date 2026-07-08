@@ -1,0 +1,182 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "reversibility.schema.json",
+  "title": "Steerable reversibility eval fixture",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "fixtureFormatVersion",
+    "kind",
+    "id",
+    "title",
+    "description",
+    "authoredBy",
+    "authoredDate",
+    "target",
+    "sample",
+    "requirementRefs",
+    "given",
+    "expected"
+  ],
+  "properties": {
+    "fixtureFormatVersion": { "const": "0.1.0" },
+    "kind": { "const": "reversibility" },
+    "id": { "$ref": "common.schema.json#/definitions/fixtureId" },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "authoredBy": { "type": "string", "minLength": 1 },
+    "authoredDate": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "target": { "$ref": "common.schema.json#/definitions/target" },
+    "sample": { "$ref": "common.schema.json#/definitions/sampleMarker" },
+    "requirementRefs": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "common.schema.json#/definitions/requirementRef" }
+    },
+    "given": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["executed", "undoRequest"],
+      "properties": {
+        "executed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope", "steps"],
+          "properties": {
+            "scope": { "enum": ["single-action", "chain"] },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "stepId",
+                  "actionId",
+                  "status",
+                  "reversibilityKind",
+                  "undoHandleStatus"
+                ],
+                "properties": {
+                  "stepId": { "$ref": "common.schema.json#/definitions/fixtureId" },
+                  "actionId": { "$ref": "common.schema.json#/definitions/capabilityId" },
+                  "params": { "$ref": "common.schema.json#/definitions/jsonObject" },
+                  "status": {
+                    "enum": ["proposed", "held", "running", "succeeded", "failed", "skipped", "undone"]
+                  },
+                  "reversibilityKind": {
+                    "enum": ["undoable", "snapshot", "irreversible"]
+                  },
+                  "undoMechanism": {
+                    "enum": [
+                      "declared_inverse",
+                      "runtime_snapshot",
+                      "compensating_action",
+                      "soft_delete_window",
+                      "honest_irreversible"
+                    ]
+                  },
+                  "undoHandleStatus": {
+                    "enum": [
+                      "available",
+                      "unavailable",
+                      "expired",
+                      "attempted",
+                      "succeeded",
+                      "failed",
+                      "superseded",
+                      "not_claimed"
+                    ]
+                  },
+                  "noUndoReason": { "type": "string", "minLength": 1 }
+                }
+              }
+            },
+            "ledgerState": { "$ref": "common.schema.json#/definitions/jsonObject" }
+          }
+        },
+        "undoRequest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scope"],
+          "properties": {
+            "scope": {
+              "enum": ["single-step", "chain-executed-scope", "aggregate-chain"]
+            },
+            "targetStepIds": {
+              "type": "array",
+              "items": { "$ref": "common.schema.json#/definitions/fixtureId" }
+            }
+          }
+        }
+      }
+    },
+    "expected": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["negativeCase", "undoOutcome", "stepResults"],
+      "properties": {
+        "negativeCase": { "$ref": "common.schema.json#/definitions/negativeCase" },
+        "undoOutcome": {
+          "enum": [
+            "inverse-applied",
+            "snapshot-restored",
+            "undo-all-succeeded",
+            "partial-undo-with-disclosure",
+            "refused-with-disclosure",
+            "failed-with-disclosure",
+            "pending-settlement"
+          ]
+        },
+        "order": {
+          "description": "Step IDs in the order undo handles must be attempted.",
+          "type": "array",
+          "items": { "$ref": "common.schema.json#/definitions/fixtureId" }
+        },
+        "stepResults": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["stepId", "result"],
+            "properties": {
+              "stepId": { "$ref": "common.schema.json#/definitions/fixtureId" },
+              "result": {
+                "enum": [
+                  "inverse-applied",
+                  "snapshot-restored",
+                  "not-executed",
+                  "not-in-scope",
+                  "not-undoable",
+                  "undo-failed",
+                  "pending-settlement"
+                ]
+              },
+              "disclosure": { "$ref": "common.schema.json#/definitions/disclosure" }
+            }
+          }
+        },
+        "disclosure": { "$ref": "common.schema.json#/definitions/disclosure" },
+        "preserveLedgerFacts": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "negativeCase": { "enum": ["undo-refusal", "partial-undo"] }
+            },
+            "required": ["negativeCase"]
+          },
+          "then": { "required": ["disclosure"] }
+        }
+      ]
+    }
+  }
+}

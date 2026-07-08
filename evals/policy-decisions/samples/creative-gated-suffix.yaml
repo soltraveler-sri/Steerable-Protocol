@@ -1,0 +1,73 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: sample.policy.creative-gated-suffix
+title: Creative posture holds quota suffix
+description: Sample policy fixture for a reversible prefix followed by a quota-consuming held suffix.
+authoredBy: issue-16-implementing-agent
+authoredDate: "2026-07-08"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses design-studio-oriented sample IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-POL-080
+  - SA-POL-088
+  - SA-POL-107
+  - SA-POL-161
+given:
+  posturePreset: creative-tool
+  surfaceId: editor
+  sessionContext:
+    ledger.available: true
+  stickyGrants: []
+  proposed:
+    kind: chain
+    steps:
+      - stepId: set_brand_palette
+        actionId: palette.set_custom
+        surfaceId: editor
+        params:
+          colors:
+            - "#0F766E"
+            - "#B45309"
+      - stepId: apply_landing
+        actionId: template.apply_landing
+        surfaceId: editor
+        params:
+          templateId: landing
+      - stepId: generate_directions
+        actionId: lab.generate_directions
+        surfaceId: editor
+        params:
+          count: 3
+expected:
+  negativeCase: none
+  chainMode: Gated suffix
+  steps:
+    - stepId: set_brand_palette
+      actionId: palette.set_custom
+      resolvedMode: Instant execution
+      reasonCodes:
+        - safe_reversible_prefix
+    - stepId: apply_landing
+      actionId: template.apply_landing
+      resolvedMode: Instant execution
+      reasonCodes:
+        - safe_reversible_prefix
+    - stepId: generate_directions
+      actionId: lab.generate_directions
+      resolvedMode: Gated suffix
+      reasonCodes:
+        - quota_gated_suffix
+  boundaries:
+    executedPrefixThroughStepId: apply_landing
+    heldSuffixFromStepId: generate_directions
+    requiredGate: quota_spend
+  rationaleMustInclude:
+    - selected posture creative-tool
+    - cost floor quota to Gated suffix
