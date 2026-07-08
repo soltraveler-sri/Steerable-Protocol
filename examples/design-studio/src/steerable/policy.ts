@@ -250,6 +250,17 @@ export function resolveChainPolicy(
     decision.refusalReason = `Policy refused at step ${firstRefusalIndex + 1}.`;
   }
 
+  if (finalMode === "Plan preview") {
+    decision.executedPrefixEndIndex = -1;
+    decision.heldSuffixStartIndex = 0;
+    decision.requiredGate = {
+      mode: "Plan preview",
+      startIndex: 0,
+      actionIds: actions.map((action) => action.id),
+    };
+    return decision;
+  }
+
   if (firstGateIndex >= 0) {
     decision.executedPrefixEndIndex = firstGateIndex - 1;
     decision.heldSuffixStartIndex = firstGateIndex;

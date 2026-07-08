@@ -8,6 +8,7 @@ import {
 import type { ProjectMeta } from "../types";
 import { ExecutionEngine } from "./execution";
 import { InMemoryLedger } from "./ledger";
+import type { PosturePreset } from "./policy";
 import {
   createDesignStudioRegistry,
   createDesignStudioSnapshotAdapter,
@@ -18,6 +19,7 @@ import type { CapabilityRegistry, CompiledReadToolDeclaration } from "./registry
 
 function createReducerBackedHost(): DesignStudioCapabilityHost {
   let state = createInitialDesignState();
+  let posture: PosturePreset = "creative-tool";
   const dispatch = (event: DesignStoreEvent) => {
     state = applyDesignStoreEvent(state, event);
   };
@@ -51,6 +53,11 @@ function createReducerBackedHost(): DesignStudioCapabilityHost {
 
   return {
     getState: () => state,
+    getPosture: () => posture,
+    setPosture: (nextPosture) => {
+      posture = nextPosture;
+    },
+    navigateToSurface: () => undefined,
     setters,
     getOrigin: () => "https://design-studio.test",
   };
@@ -74,7 +81,7 @@ describe("Design Studio capability declarations", () => {
       (action) => action.reversibility.kind,
     );
 
-    expect(actions).toHaveLength(13);
+    expect(actions).toHaveLength(15);
     expect(registry.getAllReadTools()).toHaveLength(3);
     expect(registry.getAllFacts()).toHaveLength(3);
     expect(registry.getAllSurfaces().map((surface) => surface.id)).toEqual([
@@ -83,13 +90,13 @@ describe("Design Studio capability declarations", () => {
       "settings",
     ]);
     expect(riskCounts).toEqual({
-      safe: 10,
+      safe: 12,
       side_effect: 1,
       mutating: 1,
       destructive: 1,
     });
     expect(reversibilityCounts).toEqual({
-      undoable: 8,
+      undoable: 10,
       snapshot: 3,
       irreversible: 2,
     });
@@ -106,6 +113,7 @@ describe("Design Studio capability declarations", () => {
 
     registry.registerSurface(designStudioSurfaceIds.editor);
     expect(liveActionIds(registry, designStudioSurfaceIds.editor)).toEqual([
+      "surface.navigate_surface",
       "palette.set_color",
       "palette.apply_preset",
       "typography.set_pairing",
@@ -126,6 +134,7 @@ describe("Design Studio capability declarations", () => {
 
     registry.registerSurface(designStudioSurfaceIds.templates);
     expect(liveActionIds(registry, designStudioSurfaceIds.templates)).toEqual([
+      "surface.navigate_surface",
       "template.apply_template",
     ]);
     expect(liveReadToolIds(registry, designStudioSurfaceIds.templates)).toEqual([
@@ -135,7 +144,9 @@ describe("Design Studio capability declarations", () => {
 
     registry.registerSurface(designStudioSurfaceIds.settings);
     expect(liveActionIds(registry, designStudioSurfaceIds.settings)).toEqual([
+      "surface.navigate_surface",
       "project.update_meta",
+      "policy.set_posture",
       "share.copy_link",
       "project.export_project",
       "project.reset_project",

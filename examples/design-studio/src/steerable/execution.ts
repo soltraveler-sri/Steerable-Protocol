@@ -327,6 +327,18 @@ export class ExecutionEngine {
         });
         this.options.ledger.appendPolicyDecision(record.recordId, stepPolicy);
 
+        const crossesSurface = Boolean(
+          step.targetSurfaceId && step.targetSurfaceId !== currentSurfaceId,
+        );
+
+        if (crossesSurface && step.targetSurfaceId) {
+          this.options.ledger.appendDisclosure(record.recordId, {
+            kind: "cross_surface_wait",
+            message: `Awaiting "${step.targetSurfaceId}" before ${step.action.id}.`,
+            stepIds: [step.stepId],
+          });
+        }
+
         const surfaceReady = await this.ensureSurfaceReady(step, currentSurfaceId);
 
         if (!surfaceReady.ok) {
@@ -363,6 +375,14 @@ export class ExecutionEngine {
 
         if (step.targetSurfaceId) {
           currentSurfaceId = step.targetSurfaceId;
+
+          if (crossesSurface) {
+            this.options.ledger.appendDisclosure(record.recordId, {
+              kind: "cross_surface_continue",
+              message: `Destination "${currentSurfaceId}" is ready; continuing ${step.action.id}.`,
+              stepIds: [step.stepId],
+            });
+          }
         }
 
         if (

@@ -78,13 +78,15 @@ type ExtractorName =
   | "fontPairing"
   | "sectionVisibility"
   | "sectionMove"
+  | "surface"
+  | "posture"
   | "template"
   | "empty";
 
 interface ScriptedActionPattern {
   id: string;
   actionId: string;
-  targetSurfaceId: DesignStudioSurfaceId;
+  targetSurfaceId: DesignStudioSurfaceId | "source";
   extractor: ExtractorName;
   allTerms?: string[];
   anyTerms?: string[];
@@ -132,11 +134,25 @@ const fontPairingAliases: Record<FontPairing, string[]> = {
 
 const actionPatterns: ScriptedActionPattern[] = [
   {
+    id: "surface.navigate_surface.named",
+    actionId: "surface.navigate_surface",
+    targetSurfaceId: "source",
+    extractor: "surface",
+    anyTerms: ["open", "go to", "navigate", "editor", "templates", "settings"],
+  },
+  {
     id: "palette.set_color.accent",
     actionId: "palette.set_color",
     targetSurfaceId: designStudioSurfaceIds.editor,
     extractor: "paletteColor",
     anyTerms: ["accent", "background", "surface", "text", "muted", "border"],
+  },
+  {
+    id: "policy.set_posture.named",
+    actionId: "policy.set_posture",
+    targetSurfaceId: designStudioSurfaceIds.settings,
+    extractor: "posture",
+    anyTerms: ["posture", "cautious", "business", "creative"],
   },
   {
     id: "palette.apply_preset.named",
@@ -243,6 +259,8 @@ const extractors: Record<
   fontPairing: extractFontPairing,
   sectionVisibility: extractSectionVisibility,
   sectionMove: extractSectionMove,
+  surface: extractSurface,
+  posture: extractPosture,
   template: extractTemplate,
   empty: () => ({ status: "matched", params: {} }),
 };
@@ -327,11 +345,13 @@ export class ScriptedIntentRouter implements IntentRouterProvider {
       );
     }
 
+    const expandedSteps = withNavigationSteps(steps, request.sourceSurfaceId);
+
     return {
-      routeClass: steps.length === 1 ? "single action" : "action chain",
+      routeClass: expandedSteps.length === 1 ? "single action" : "action chain",
       sourceSurfaceId: request.sourceSurfaceId,
       intent,
-      steps,
+      steps: expandedSteps,
     };
   }
 }
@@ -377,10 +397,15 @@ function classifyActionSegment(
       );
     }
 
-    if (!request.registry.isCapabilityOnSurface(pattern.actionId, pattern.targetSurfaceId)) {
+    const targetSurfaceId =
+      pattern.targetSurfaceId === "source"
+        ? request.sourceSurfaceId
+        : pattern.targetSurfaceId;
+
+    if (!request.registry.isCapabilityOnSurface(pattern.actionId, targetSurfaceId)) {
       return refusalRoute(
         request,
-        `Action "${pattern.actionId}" is not declared on "${pattern.targetSurfaceId}".`,
+        `Action "${pattern.actionId}" is not declared on "${targetSurfaceId}".`,
         "surface_capability_unavailable",
       );
     }
@@ -397,7 +422,7 @@ function classifyActionSegment(
             request.registry,
             pattern.actionId,
             request.sourceSurfaceId,
-            pattern.targetSurfaceId,
+            targetSurfaceId,
           ),
           patternId: pattern.id,
         },
@@ -530,6 +555,49 @@ function extractSectionMove(text: string, request: IntentRouterRequest): Extract
   };
 }
 
+function extractSurface(text: string): ExtractorResult {
+  const normalized = normalizeText(text);
+  const surface = Object.values(designStudioSurfaceIds).find((surfaceId) =>
+    includesTerm(normalized, surfaceId),
+  );
+
+  if (!surface) {
+    return { status: "missing", missing: ["surface"] };
+  }
+
+  return {
+    status: "matched",
+    params: { surfaceId: surface },
+  };
+}
+
+function extractPosture(text: string): ExtractorResult {
+  const normalized = normalizeText(text);
+
+  if (
+    includesTerm(normalized, "cautious") ||
+    includesTerm(normalized, "business") ||
+    includesTerm(normalized, "business app")
+  ) {
+    return {
+      status: "matched",
+      params: { posture: "business-app" },
+    };
+  }
+
+  if (
+    includesTerm(normalized, "creative") ||
+    includesTerm(normalized, "creative tool")
+  ) {
+    return {
+      status: "matched",
+      params: { posture: "creative-tool" },
+    };
+  }
+
+  return { status: "missing", missing: ["posture"] };
+}
+
 function extractTemplate(text: string, request: IntentRouterRequest): ExtractorResult {
   const normalized = normalizeText(text);
   const template = request.state.templates.find((item) =>
@@ -544,6 +612,48 @@ function extractTemplate(text: string, request: IntentRouterRequest): ExtractorR
     status: "matched",
     params: { templateId: template.id },
   };
+}
+
+function withNavigationSteps(
+  steps: ResolvedIntentStep[],
+  sourceSurfaceId: SurfaceId,
+): ResolvedIntentStep[] {
+  let currentSurfaceId = sourceSurfaceId;
+  const expanded: ResolvedIntentStep[] = [];
+
+  steps.forEach((step) => {
+    if (step.targetSurfaceId !== currentSurfaceId) {
+      expanded.push({
+        actionId: "surface.navigate_surface",
+        params: { surfaceId: step.targetSurfaceId },
+        targetSurfaceId: currentSurfaceId,
+        patternId: `surface.navigate_surface.to_${step.targetSurfaceId}`,
+      });
+      currentSurfaceId = step.targetSurfaceId;
+    }
+
+    expanded.push(step);
+    currentSurfaceId = surfaceAfterStep(step, currentSurfaceId);
+  });
+
+  return expanded;
+}
+
+function surfaceAfterStep(
+  step: ResolvedIntentStep,
+  fallbackSurfaceId: SurfaceId,
+): SurfaceId {
+  if (
+    step.actionId === "surface.navigate_surface" &&
+    step.params &&
+    typeof step.params === "object" &&
+    "surfaceId" in step.params &&
+    typeof step.params.surfaceId === "string"
+  ) {
+    return step.params.surfaceId;
+  }
+
+  return step.targetSurfaceId ?? fallbackSurfaceId;
 }
 
 function splitIntoSegments(intent: string): string[] {
