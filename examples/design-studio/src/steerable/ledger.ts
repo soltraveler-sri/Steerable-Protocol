@@ -182,8 +182,11 @@ export interface EvalTrace {
   disclosures: DisclosureRecord[];
 }
 
+type LedgerListener = () => void;
+
 export class InMemoryLedger {
   private readonly records = new Map<string, SteeringInvocationRecord>();
+  private readonly listeners = new Set<LedgerListener>();
   private sequence = 0;
   private decisionSequence = 0;
   private disclosureSequence = 0;
@@ -223,6 +226,7 @@ export class InMemoryLedger {
     };
 
     this.records.set(recordId, record);
+    this.emit();
     return record;
   }
 
@@ -252,6 +256,7 @@ export class InMemoryLedger {
     };
 
     record.policyDecisions.push(policyRecord);
+    this.emit();
     return policyRecord;
   }
 
@@ -262,6 +267,7 @@ export class InMemoryLedger {
       ...approval,
       updatedAt: this.now().toISOString(),
     };
+    this.emit();
   }
 
   updateStep(
@@ -272,6 +278,7 @@ export class InMemoryLedger {
     const step = this.requireStep(recordId, stepId);
 
     Object.assign(step, patch);
+    this.emit();
     return step;
   }
 
@@ -279,6 +286,7 @@ export class InMemoryLedger {
     const step = this.requireStep(recordId, stepId);
 
     step.undo = handle;
+    this.emit();
   }
 
   updateUndoHandle(
@@ -298,6 +306,7 @@ export class InMemoryLedger {
       ...patch,
     };
 
+    this.emit();
     return step.undo;
   }
 
@@ -326,6 +335,7 @@ export class InMemoryLedger {
     };
 
     record.disclosures.push(nextDisclosure);
+    this.emit();
     return nextDisclosure;
   }
 
@@ -341,6 +351,7 @@ export class InMemoryLedger {
     };
 
     record.undoAttempts.push(undoAttempt);
+    this.emit();
     return undoAttempt;
   }
 
@@ -357,6 +368,7 @@ export class InMemoryLedger {
     }
 
     Object.assign(attempt, patch);
+    this.emit();
     return attempt;
   }
 
@@ -376,6 +388,14 @@ export class InMemoryLedger {
 
   getRecords(): SteeringInvocationRecord[] {
     return Array.from(this.records.values());
+  }
+
+  subscribe(listener: LedgerListener): () => void {
+    this.listeners.add(listener);
+
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   extractEvalTrace(options: { redactSensitive?: boolean } = {}): EvalTrace[] {
@@ -444,6 +464,11 @@ export class InMemoryLedger {
       ...step.undo,
       ...patch,
     };
+    this.emit();
+  }
+
+  private emit(): void {
+    this.listeners.forEach((listener) => listener());
   }
 }
 

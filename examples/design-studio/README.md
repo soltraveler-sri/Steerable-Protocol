@@ -12,13 +12,14 @@ steerable by wrapping the ordinary setters already present here.
 - A plain React reducer store with discrete, semantically named setters.
 - A token-driven landing preview that updates immediately when palette,
   typography, layout, section, template, or project metadata changes.
+- A persistent in-app steering panel with deterministic intent routing,
+  activity trail, inline approval gates, and undo.
 - A fake export quota of 3 mock exports per page load.
 
 ## What This Is Not
 
-- No model calls, chat panel, intent router, or backend.
-- No steering UI yet; the capability registry is exercised by tests and the
-  inline proto-runtime.
+- No model calls, live provider, or backend.
+- No cross-surface chain demo, posture toggle, or plan-preview card yet.
 - No persistence beyond the in-memory session state.
 - Not a product-grade design tool.
 
@@ -29,6 +30,41 @@ npm ci
 npm run dev
 npm run build
 ```
+
+## Steering Demo Script
+
+The steering panel uses a deterministic scripted router. Patterns are data:
+each pattern names a declaration ID, a target surface, and a generic extractor
+such as `paletteColor`, `sectionMove`, or `template`. Classification loops over
+that data, validates action params against the live registry, and returns the
+SA-EXEC route class. The router sits behind `IntentRouterProvider`; a model
+provider can implement that same interface later, but this example ships only
+`ScriptedIntentRouter` and makes zero model calls.
+
+| Utterance | Route class | Capability route |
+| --- | --- | --- |
+| `make the accent #FF6600` | `single action` | `palette.set_color { token: "accent", hex: "#FF6600" }` |
+| `set accent to #FF6600` | `single action` | `palette.set_color { token: "accent", hex: "#FF6600" }` |
+| `make the accent forest green` | `single action` | `palette.set_color { token: "accent", hex: "#228B22" }` |
+| `switch to citrus` | `single action` | `palette.apply_preset { presetId: "citrus" }` |
+| `switch the palette to citrus` | `single action` | `palette.apply_preset { presetId: "citrus" }` |
+| `use the modern font pairing` | `single action` | `typography.set_pairing { pairing: "modern" }` |
+| `hide pricing` | `single action` | `section.set_visibility { sectionId: "pricing", visible: false }` |
+| `move social proof up` | `single action` | `section.move_section { sectionId: "social-proof", direction: "up" }` |
+| `apply the SaaS launch template` | `single action` | `template.apply_template { templateId: "saas-launch" }` |
+| `copy the share link` | `single action` | `share.copy_link {}` |
+| `export this mock page` | `single action` | `project.export_project {}`; policy pauses at one inline Apply gate |
+| `reset the project` | `single action` | `project.reset_project {}`; confirmation is always required |
+| `switch to citrus and hide pricing` | `action chain` | `palette.apply_preset`, then `section.set_visibility` |
+| `what templates are available?` | `answer` | `template.list_available` |
+| `make it pop` | `clarification` | Missing target and parameter |
+| `send this page to Mailchimp` | `refusal/handoff` | Outside declared capabilities |
+
+The pattern matcher is intentionally honest: adding a supported utterance means
+adding pattern data or aliases, not relying on language understanding. Safe
+reversible actions run instantly under the default `creative-tool` posture.
+Quota export and reset are held by policy through the runtime `ApprovalHook`;
+the UI renders one inline Apply for the held suffix, never a modal per step.
 
 ## App Surfaces
 
