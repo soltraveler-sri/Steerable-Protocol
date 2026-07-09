@@ -1,0 +1,66 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.business-plan-preview-chain
+title: Business mixed chain previews whole plan
+description: Same chain as creative fixture resolves to one whole-plan preview before any step executes.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-090
+  - SA-POL-107
+  - SA-EXEC-130
+  - SA-EXEC-133
+given:
+  posturePreset: business-app
+  surfaceId: templates
+  proposed:
+    kind: chain
+    steps:
+      - stepId: apply_template
+        actionId: template.apply_template
+        surfaceId: templates
+        params:
+          templateId: saas-launch
+      - stepId: navigate_editor
+        actionId: surface.navigate_surface
+        surfaceId: templates
+        params:
+          surfaceId: editor
+      - stepId: export_project
+        actionId: project.export_project
+        surfaceId: editor
+        params: {}
+expected:
+  negativeCase: none
+  chainMode: Plan preview
+  steps:
+    - stepId: apply_template
+      actionId: template.apply_template
+      resolvedMode: Optimistic chain
+      reasonCodes:
+        - preset_business_app_safe_snapshot_optimistic_chain
+    - stepId: navigate_editor
+      actionId: surface.navigate_surface
+      resolvedMode: Optimistic chain
+      reasonCodes:
+        - preset_business_app_safe_undoable_optimistic_chain
+    - stepId: export_project
+      actionId: project.export_project
+      resolvedMode: Plan preview
+      reasonCodes:
+        - effect_floor_business_app_cost_quota
+  boundaries:
+    heldSuffixFromStepId: apply_template
+    requiredGate: plan_preview
+  rationaleMustInclude:
+    - selected posture business-app
+    - cost floor quota to Plan preview

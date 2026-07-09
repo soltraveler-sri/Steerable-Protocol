@@ -1,0 +1,83 @@
+fixtureFormatVersion: "0.1.0"
+kind: cross-surface
+id: design-studio.cross-surface.templates-to-editor-prefix-undo
+title: Prefix undo succeeds after registration timeout
+description: Timeout failure leaves template and navigation prefix handles executable by undo-all.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-173
+  - SA-EXEC-174
+  - SA-LED-112
+given:
+  startSurfaceId: templates
+  chain:
+    - stepId: apply_template
+      actionId: template.apply_template
+      targetSurfaceId: templates
+      params:
+        templateId: saas-launch
+      requiresCapabilities: []
+      reversiblePrefix: true
+    - stepId: navigate_editor
+      actionId: surface.navigate_surface
+      targetSurfaceId: templates
+      params:
+        surfaceId: editor
+      requiresCapabilities: []
+      reversiblePrefix: true
+    - stepId: set_accent
+      actionId: palette.set_color
+      targetSurfaceId: editor
+      params:
+        token: accent
+        hex: "#228B22"
+      requiresCapabilities:
+        - palette.set_color
+      reversiblePrefix: true
+  registrationScenario:
+    targetSurfaceId: editor
+    timeoutMs: 5
+    userNavigation: none
+  policyContext:
+    undoAfterFailure: true
+expected:
+  negativeCase: timeout-failure
+  sequence:
+    - kind: navigate
+      stepId: navigate_editor
+      actionId: surface.navigate_surface
+      surfaceId: editor
+    - kind: await-surface-registration
+      surfaceId: editor
+      timeoutMs: 5
+    - kind: await-capabilities
+      surfaceId: editor
+      capabilityIds:
+        - palette.set_color
+      timeoutMs: 5
+    - kind: fail-timeout
+      stepId: set_accent
+      actionId: palette.set_color
+      surfaceId: editor
+      timeoutMs: 5
+    - kind: preserve-undo-prefix
+    - kind: stop-suffix
+  failure:
+    reasonCode: surface_readiness_timeout
+    messageContains:
+      - did not become ready
+  preservedUndoStepIds:
+    - apply_template
+    - navigate_editor
+  notExecutedStepIds:
+    - set_accent

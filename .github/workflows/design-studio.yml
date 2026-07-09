@@ -1,0 +1,23 @@
+name: Design Studio
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build-test-evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            examples/design-studio/package-lock.json
+            evals/package-lock.json
+      - run: npm --prefix examples/design-studio ci
+      - run: npm --prefix examples/design-studio run build
+      - run: npm --prefix examples/design-studio test
+      - run: npm --prefix examples/design-studio run evals

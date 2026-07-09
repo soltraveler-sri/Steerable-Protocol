@@ -1,0 +1,31 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.ambiguous-clarification
+title: Ambiguous style request asks clarification
+description: Boundary case where target object and parameter are missing.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-029
+given:
+  surfaceId: editor
+  utterance: "make it pop"
+expected:
+  routeClass: clarification
+  negativeCase: clarification
+  clarification:
+    missing:
+      - field: target object
+        reason: The utterance does not identify the design region to change.
+      - field: parameter value
+        reason: The utterance does not specify a concrete value.

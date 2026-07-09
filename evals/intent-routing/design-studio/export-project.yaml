@@ -1,0 +1,30 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.export-project
+title: Export routes to quota action
+description: Documented export utterance maps to project.export_project.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "export this mock page"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: project.export_project
+      params:
+        allowExtra: false
+        fields: {}

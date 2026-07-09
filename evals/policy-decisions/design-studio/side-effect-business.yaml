@@ -1,0 +1,41 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.side-effect-business
+title: Business posture previews irreversible side effect
+description: Same share-link proposal resolves to Plan preview under business-app.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-080
+  - SA-POL-090
+  - SA-POL-108
+given:
+  posturePreset: business-app
+  surfaceId: settings
+  proposed:
+    kind: action
+    steps:
+      - stepId: copy_share
+        actionId: share.copy_link
+        surfaceId: settings
+        params: {}
+expected:
+  negativeCase: none
+  chainMode: Plan preview
+  steps:
+    - stepId: copy_share
+      actionId: share.copy_link
+      resolvedMode: Plan preview
+      reasonCodes:
+        - preset_business_app_side_effect_irreversible_plan_preview
+  rationaleMustInclude:
+    - selected posture business-app

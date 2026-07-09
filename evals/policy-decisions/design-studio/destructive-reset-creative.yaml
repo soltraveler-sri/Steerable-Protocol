@@ -1,0 +1,43 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.destructive-reset-creative
+title: Creative destructive reset requires gate
+description: Destructive snapshot reset resolves to Gated suffix with confirmation-always rationale.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-032
+  - SA-POL-071
+  - SA-POL-088
+  - SA-POL-108
+given:
+  posturePreset: creative-tool
+  surfaceId: settings
+  proposed:
+    kind: action
+    steps:
+      - stepId: reset_project
+        actionId: project.reset_project
+        surfaceId: settings
+        params: {}
+expected:
+  negativeCase: none
+  chainMode: Gated suffix
+  steps:
+    - stepId: reset_project
+      actionId: project.reset_project
+      resolvedMode: Gated suffix
+      reasonCodes:
+        - preset_creative_tool_destructive_snapshot_gated_suffix
+        - confirmation_floor_always
+  rationaleMustInclude:
+    - selected posture creative-tool

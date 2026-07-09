@@ -36,7 +36,16 @@ npm ci
 npm run dev
 npx vitest run
 npm run build
+npm run evals
 ```
+
+`npm run evals` installs the small eval-runner dependencies from
+`../../evals/package-lock.json`, validates every fixture under `../../evals`,
+and runs the non-sample Design Studio suites through
+`src/steerable/evalAdapter.ts`. The script is owned by this example package
+because the repository has no root npm package and the adapter intentionally
+imports the example's real router, policy resolver, execution engine, ledger,
+and undo seams.
 
 ## Steering Demo Script
 

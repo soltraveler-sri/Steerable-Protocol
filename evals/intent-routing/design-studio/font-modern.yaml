@@ -1,0 +1,33 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.font-modern
+title: Modern font routes to typography action
+description: Documented typography utterance maps to a declared safe action.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "use the modern font pairing"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: typography.set_pairing
+      params:
+        allowExtra: false
+        fields:
+          pairing:
+            kind: exact
+            value: modern

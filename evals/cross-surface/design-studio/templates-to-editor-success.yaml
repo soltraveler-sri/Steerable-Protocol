@@ -1,0 +1,77 @@
+fixtureFormatVersion: "0.1.0"
+kind: cross-surface
+id: design-studio.cross-surface.templates-to-editor-success
+title: Templates chain continues after Editor registration
+description: Happy path navigates, awaits the Editor surface, then continues with palette.set_color.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-160
+  - SA-EXEC-164
+  - SA-EXEC-168
+  - SA-EXEC-169
+given:
+  startSurfaceId: templates
+  chain:
+    - stepId: apply_template
+      actionId: template.apply_template
+      targetSurfaceId: templates
+      params:
+        templateId: saas-launch
+      requiresCapabilities: []
+      reversiblePrefix: true
+    - stepId: navigate_editor
+      actionId: surface.navigate_surface
+      targetSurfaceId: templates
+      params:
+        surfaceId: editor
+      requiresCapabilities: []
+      reversiblePrefix: true
+    - stepId: set_accent
+      actionId: palette.set_color
+      targetSurfaceId: editor
+      params:
+        token: accent
+        hex: "#228B22"
+      requiresCapabilities:
+        - palette.set_color
+      reversiblePrefix: true
+  registrationScenario:
+    targetSurfaceId: editor
+    timeoutMs: 50
+    registersAtMs: 1
+    capabilitiesAvailableAtMs: 1
+    userNavigation: none
+expected:
+  negativeCase: none
+  sequence:
+    - kind: navigate
+      stepId: navigate_editor
+      actionId: surface.navigate_surface
+      surfaceId: editor
+    - kind: await-surface-registration
+      surfaceId: editor
+      timeoutMs: 50
+    - kind: await-capabilities
+      surfaceId: editor
+      capabilityIds:
+        - palette.set_color
+      timeoutMs: 50
+    - kind: continue
+      stepId: set_accent
+      actionId: palette.set_color
+      surfaceId: editor
+  preservedUndoStepIds:
+    - apply_template
+    - navigate_editor
+    - set_accent
+  notExecutedStepIds: []

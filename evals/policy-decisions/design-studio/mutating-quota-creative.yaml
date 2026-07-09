@@ -1,0 +1,44 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.mutating-quota-creative
+title: Creative quota spend gates suffix
+description: Mutating irreversible export resolves to Gated suffix and records the quota effect floor.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-029
+  - SA-POL-088
+  - SA-POL-161
+  - SA-POL-108
+given:
+  posturePreset: creative-tool
+  surfaceId: editor
+  proposed:
+    kind: action
+    steps:
+      - stepId: export_project
+        actionId: project.export_project
+        surfaceId: editor
+        params: {}
+expected:
+  negativeCase: none
+  chainMode: Gated suffix
+  steps:
+    - stepId: export_project
+      actionId: project.export_project
+      resolvedMode: Gated suffix
+      reasonCodes:
+        - preset_creative_tool_mutating_irreversible_gated_suffix
+        - effect_floor_creative_tool_cost_quota
+  rationaleMustInclude:
+    - selected posture creative-tool
+    - cost floor quota to Gated suffix

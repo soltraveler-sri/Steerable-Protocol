@@ -1,0 +1,51 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: design-studio.reversibility.undo-refusal
+title: Full undo refuses irreversible-only scope
+description: Aggregate-chain undo without partial permission refuses a succeeded irreversible export.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-LED-113
+  - SA-LED-114
+given:
+  executed:
+    scope: chain
+    steps:
+      - stepId: export_project
+        actionId: project.export_project
+        params: {}
+        status: succeeded
+        reversibilityKind: irreversible
+        undoMechanism: honest_irreversible
+        undoHandleStatus: not_claimed
+    ledgerState:
+      surfaceId: editor
+      posturePreset: creative-tool
+  undoRequest:
+    scope: aggregate-chain
+    targetStepIds:
+      - export_project
+expected:
+  negativeCase: undo-refusal
+  undoOutcome: refused-with-disclosure
+  order: []
+  stepResults:
+    - stepId: export_project
+      result: not-undoable
+  disclosure:
+    reasonCode: undo_refused
+    messageContains:
+      - Partial undo
+      - not reversed export_project
+    requirementRefs:
+      - SA-LED-114

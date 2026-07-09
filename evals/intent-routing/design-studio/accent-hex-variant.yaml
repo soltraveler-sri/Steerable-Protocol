@@ -1,0 +1,36 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.accent-hex-variant
+title: Accent hex variant routes identically
+description: Documented wording variant for the same palette token change.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "set accent to #FF6600"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: palette.set_color
+      params:
+        allowExtra: false
+        fields:
+          token:
+            kind: exact
+            value: accent
+          hex:
+            kind: caseInsensitive
+            value: "#ff6600"

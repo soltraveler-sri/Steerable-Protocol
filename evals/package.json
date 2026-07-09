@@ -2,7 +2,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "validate": "node validate-fixtures.mjs"
+    "validate": "node validate-fixtures.mjs",
+    "evals": "node run-fixtures.mjs --target=design-studio"
   },
   "devDependencies": {
     "ajv": "^8.17.1"

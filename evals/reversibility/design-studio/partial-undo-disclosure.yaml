@@ -1,0 +1,77 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: design-studio.reversibility.partial-undo-disclosure
+title: Partial undo discloses irreversible export
+description: Undo-all reverses available handles and discloses the irreversible quota export.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-LED-113
+  - SA-LED-114
+  - SA-LED-115
+given:
+  executed:
+    scope: chain
+    steps:
+      - stepId: set_accent
+        actionId: palette.set_color
+        params:
+          token: accent
+          hex: "#228B22"
+        status: succeeded
+        reversibilityKind: undoable
+        undoMechanism: declared_inverse
+        undoHandleStatus: available
+      - stepId: export_project
+        actionId: project.export_project
+        params: {}
+        status: succeeded
+        reversibilityKind: irreversible
+        undoMechanism: honest_irreversible
+        undoHandleStatus: not_claimed
+      - stepId: set_font
+        actionId: typography.set_pairing
+        params:
+          pairing: modern
+        status: succeeded
+        reversibilityKind: undoable
+        undoMechanism: declared_inverse
+        undoHandleStatus: available
+    ledgerState:
+      surfaceId: editor
+      posturePreset: creative-tool
+  undoRequest:
+    scope: chain-executed-scope
+    targetStepIds:
+      - set_accent
+      - export_project
+      - set_font
+expected:
+  negativeCase: partial-undo
+  undoOutcome: partial-undo-with-disclosure
+  order:
+    - set_font
+    - set_accent
+  stepResults:
+    - stepId: set_accent
+      result: inverse-applied
+    - stepId: export_project
+      result: not-undoable
+    - stepId: set_font
+      result: inverse-applied
+  disclosure:
+    reasonCode: partial_undo
+    messageContains:
+      - Partial undo
+      - not reversed export_project
+    requirementRefs:
+      - SA-LED-114

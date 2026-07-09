@@ -1,0 +1,44 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.mutating-quota-business
+title: Business quota spend previews plan
+description: Same export proposal resolves to Plan preview under business-app.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-029
+  - SA-POL-090
+  - SA-POL-163
+  - SA-POL-108
+given:
+  posturePreset: business-app
+  surfaceId: editor
+  proposed:
+    kind: action
+    steps:
+      - stepId: export_project
+        actionId: project.export_project
+        surfaceId: editor
+        params: {}
+expected:
+  negativeCase: none
+  chainMode: Plan preview
+  steps:
+    - stepId: export_project
+      actionId: project.export_project
+      resolvedMode: Plan preview
+      reasonCodes:
+        - preset_business_app_mutating_irreversible_plan_preview
+        - effect_floor_business_app_cost_quota
+  rationaleMustInclude:
+    - selected posture business-app
+    - cost floor quota to Plan preview

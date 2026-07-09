@@ -1,0 +1,47 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.destructive-without-confirmation-denied
+title: Destructive reset without confirmation is denied
+description: Runtime signal maps missing destructive confirmation to a policy override refusal.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-071
+  - SA-POL-094
+  - SA-POL-108
+given:
+  posturePreset: creative-tool
+  surfaceId: settings
+  runtimeSignals:
+    destructiveConfirmation: missing
+  proposed:
+    kind: action
+    steps:
+      - stepId: reset_project
+        actionId: project.reset_project
+        surfaceId: settings
+        params: {}
+expected:
+  negativeCase: policy-denial
+  chainMode: Refuse / hand off
+  steps:
+    - stepId: reset_project
+      actionId: project.reset_project
+      resolvedMode: Refuse / hand off
+      reasonCodes:
+        - destructive_confirmation_missing
+  denial:
+    reasonCode: destructive_confirmation_missing
+    messageContains:
+      - Policy refused
+  rationaleMustInclude:
+    - destructive_confirmation_missing

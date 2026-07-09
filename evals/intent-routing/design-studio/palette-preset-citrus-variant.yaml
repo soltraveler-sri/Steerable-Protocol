@@ -1,0 +1,33 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.palette-citrus-variant
+title: Palette preset variant routes to same action
+description: Documented longer wording for the citrus palette preset.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "switch the palette to citrus"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: palette.apply_preset
+      params:
+        allowExtra: false
+        fields:
+          presetId:
+            kind: exact
+            value: citrus

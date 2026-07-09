@@ -1,0 +1,49 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.sticky-grant-share-link
+title: Sticky grant raises share link to instant
+description: Explicit scoped grant raises a non-destructive business-app side effect to Instant execution.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-126
+  - SA-POL-127
+  - SA-POL-131
+given:
+  posturePreset: business-app
+  surfaceId: settings
+  sessionContext:
+    allowGrantsToRaiseAutonomy: true
+  stickyGrants:
+    - grantId: grant_share_instant
+      subject: action:share.copy_link
+      effect: Instant execution
+      expires: "2099-01-01T00:00:00.000Z"
+  proposed:
+    kind: action
+    steps:
+      - stepId: copy_share
+        actionId: share.copy_link
+        surfaceId: settings
+        params: {}
+expected:
+  negativeCase: none
+  chainMode: Instant execution
+  steps:
+    - stepId: copy_share
+      actionId: share.copy_link
+      resolvedMode: Instant execution
+      reasonCodes:
+        - preset_business_app_side_effect_irreversible_plan_preview
+        - grant_used
+  rationaleMustInclude:
+    - grant grant_applied
