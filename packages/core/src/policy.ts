@@ -235,8 +235,10 @@ function resolveOneAction(action: AnyCompiledActionDeclaration, inputs: PolicyIn
   const effectFloors = effectFloorsFor(action.effects, inputs.posture);
   for (const floor of effectFloors) {
     if (floor.floorMode) {
+      // SA-POL-173: participation is measured against the incoming mode, so an
+      // equal floor is applied even though it does not change the result.
+      floor.applied = floor.floorMode === mode || isLessAutonomous(floor.floorMode, mode);
       const next = applyModeFloor(mode, floor.floorMode);
-      floor.applied = next !== mode || floor.floorMode === mode;
       mode = next;
       if (floor.applied) reasonCodes.push(floor.reasonCode);
     }
