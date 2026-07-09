@@ -43,9 +43,9 @@ npm run evals
 `../../evals/package-lock.json`, validates every fixture under `../../evals`,
 and runs the non-sample Design Studio suites through
 `src/steerable/evalAdapter.ts`. The script is owned by this example package
-because the repository has no root npm package and the adapter intentionally
-imports the example's real router, policy resolver, execution engine, ledger,
-and undo seams.
+because the adapter intentionally combines the example's real router and state
+adapter with the package-backed registry, policy, execution, ledger, and undo
+seams.
 
 ## Steering Demo Script
 

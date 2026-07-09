@@ -5,14 +5,14 @@ import {
   type DesignSetters,
   type DesignStoreEvent,
 } from "../state/designStore";
-import { resolveChainPolicy } from "./policy";
-import type { PosturePreset } from "./policy";
 import {
   ExecutionEngine,
   RegistrySurfaceReadiness,
-  createManualApprovalController,
-} from "./execution";
-import { InMemoryLedger } from "./ledger";
+  InMemoryLedger,
+  resolveChainPolicy,
+  type PosturePreset,
+} from "@steerable/core";
+import { createManualApprovalController } from "./testUtils";
 import { ScriptedIntentRouter, type ActionIntentRoute } from "./router";
 import {
   createDesignStudioRegistry,

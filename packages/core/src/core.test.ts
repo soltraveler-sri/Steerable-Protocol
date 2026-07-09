@@ -11,6 +11,7 @@ import {
   type AnyCompiledActionDeclaration,
 } from "./registry.js";
 import { posturePresetMappings, resolveActionPolicy } from "./policy.js";
+import { InMemoryLedger } from "./ledger.js";
 
 const stringParams = createStrictObjectSchema<{ value: string }>(["value"], (input) => {
   if (typeof input.value !== "string") throw new Error("value must be a string");
@@ -162,5 +163,19 @@ describe("SA-POL resolver", () => {
     const destructive = compiledAction({ risk: "destructive", confirmation: "policy" });
     const destructiveDecision = resolveActionPolicy(destructive, { posture: "creative-tool", currentSurface: "design-studio", grants: [grant], sessionId: "session-1", allowGrantsToRaiseAutonomy: true });
     expect(destructiveDecision.rationale.grant.reason).toBe("grant_not_allowed_for_destructive_action");
+  });
+});
+
+describe("SA-LED read model", () => {
+  it("notifies subscribers when a record is created or updated", () => {
+    const ledger = new InMemoryLedger();
+    let notifications = 0;
+    const unsubscribe = ledger.subscribe(() => { notifications += 1; });
+    const record = ledger.createInvocation({ intent: { text: "set color" }, steps: [{ stepId: "step_1", actionId: "palette.set_color", params: { value: "blue" }, writes: ["design.palette"] }] });
+    ledger.updateStep(record.recordId, "step_1", { status: "running" });
+    unsubscribe();
+    ledger.updateStep(record.recordId, "step_1", { status: "succeeded" });
+    expect(notifications).toBe(2);
+    expect(ledger.getRecords()).toHaveLength(1);
   });
 });

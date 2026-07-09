@@ -345,6 +345,20 @@ export class CapabilityRegistry {
     });
   }
 
+  getLiveActions(surfaceId: SurfaceId): AnyCompiledActionDeclaration[] {
+    return [...this.actions.values()].filter((action) => this.isActionAvailableOnSurface(action.id, surfaceId));
+  }
+
+  getLiveReadTools(surfaceId: SurfaceId): CompiledReadToolDeclaration[] {
+    return [...this.readTools.values()].filter((readTool) => this.isReadToolAvailableOnSurface(readTool.id, surfaceId));
+  }
+
+  getLiveFacts(surfaceId: SurfaceId): FactsDeclaration[] {
+    return [...this.facts.values()].filter((facts) =>
+      facts.surface === surfaceId && this.liveSurfaces.has(surfaceId) && this.isCapabilityOnSurface(facts.id, surfaceId),
+    );
+  }
+
   validateActionParams<Params>(action: CompiledActionDeclaration<Params>, params: unknown): Params {
     return action.params.parse(params);
   }

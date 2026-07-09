@@ -6,16 +6,20 @@ import {
   type DesignStoreEvent,
 } from "../state/designStore";
 import type { ProjectMeta } from "../types";
-import { ExecutionEngine } from "./execution";
-import { InMemoryLedger } from "./ledger";
-import type { PosturePreset } from "./policy";
+import {
+  ExecutionEngine,
+  InMemoryLedger,
+  createEcosystemAdapter,
+  type CapabilityRegistry,
+  type CompiledReadToolDeclaration,
+  type PosturePreset,
+} from "@steerable/core";
 import {
   createDesignStudioRegistry,
   createDesignStudioSnapshotAdapter,
   designStudioSurfaceIds,
   type DesignStudioCapabilityHost,
 } from "./designStudioCapabilities";
-import type { CapabilityRegistry, CompiledReadToolDeclaration } from "./registry";
 
 function createReducerBackedHost(): DesignStudioCapabilityHost {
   let state = createInitialDesignState();
@@ -252,7 +256,7 @@ describe("Design Studio capability declarations", () => {
 
     await expect(
       Promise.resolve(
-      designTool.query({}, { registry, surfaceId: designStudioSurfaceIds.editor, now: fixedNow }),
+      designTool.query({}, { surfaceId: designStudioSurfaceIds.editor }),
       ),
     ).resolves.toEqual(
       expect.objectContaining({
@@ -267,7 +271,7 @@ describe("Design Studio capability declarations", () => {
       Promise.resolve(
       templatesTool.query(
         { tone: "premium" },
-        { registry, surfaceId: designStudioSurfaceIds.templates, now: fixedNow },
+        { surfaceId: designStudioSurfaceIds.templates },
       ),
       ),
     ).resolves.toEqual({
@@ -281,7 +285,7 @@ describe("Design Studio capability declarations", () => {
     });
     await expect(
       Promise.resolve(
-      quotaTool.query({}, { registry, surfaceId: designStudioSurfaceIds.settings, now: fixedNow }),
+      quotaTool.query({}, { surfaceId: designStudioSurfaceIds.settings }),
       ),
     ).resolves.toEqual(
       expect.objectContaining({
@@ -290,6 +294,16 @@ describe("Design Studio capability declarations", () => {
         canExport: true,
       }),
     );
+  });
+
+  it("exports JSON schemas for every Design Studio action through the ecosystem adapter", () => {
+    const registry = createDesignStudioRegistry(createReducerBackedHost());
+    const adapter = createEcosystemAdapter(registry, "creative-tool");
+
+    expect(Object.keys(adapter.toolSchemas).sort()).toEqual(
+      registry.getAllActions().map((action) => action.id).sort(),
+    );
+    expect(Object.values(adapter.toolSchemas).every((tool) => tool.inputSchema !== undefined)).toBe(true);
   });
 });
 

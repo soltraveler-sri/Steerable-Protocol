@@ -15,25 +15,32 @@ import { useDesignStudio } from "../state/designStore";
 import type { DesignState } from "../types";
 import {
   DEFAULT_SURFACE_READINESS_TIMEOUT_MS,
-  ExecutionEngine,
+  runUndoHandle,
+  undoAll as undoAllRecord,
   type ApprovalDecision,
   type ApprovalHook,
   type ApprovalRequest,
   type ChainExecutionRun,
-} from "./execution";
-import { InMemoryLedger, type SteeringInvocationRecord } from "./ledger";
-import type { PosturePreset } from "./policy";
+  type CapabilityRegistry,
+  type PosturePreset,
+  type StateSnapshotAdapter,
+  type SteeringInvocationRecord,
+  type SurfaceId,
+} from "@steerable/core";
+import {
+  SteerableProvider as SteerableRuntimeProvider,
+  createSteerableRuntime,
+  type SteerableRuntime,
+} from "@steerable/react";
 import { ScriptedIntentRouter, type IntentRoute } from "./router";
 import {
-  createDesignStudioRegistry,
+  createDesignStudioDeclarations,
   createDesignStudioSnapshotAdapter,
   designStudioSurfaceIds,
   type DesignStudioCapabilityHost,
   type DesignStudioSurfaceId,
 } from "./designStudioCapabilities";
-import type { CapabilityRegistry, StateSnapshotAdapter, SurfaceId } from "./registry";
 import { canUndoAnyStep, canUndoStep } from "./trail";
-import { runUndoHandle, undoAll as undoAllRecord } from "./undo";
 
 interface SteeringNotice {
   id: string;
@@ -45,14 +52,6 @@ interface SteeringNotice {
 interface UndoToast {
   recordId: string;
   intent: string;
-}
-
-interface SteeringRuntime {
-  registry: CapabilityRegistry;
-  ledger: InMemoryLedger;
-  snapshotStore: StateSnapshotAdapter;
-  engine: ExecutionEngine;
-  router: ScriptedIntentRouter;
 }
 
 interface SteeringContextValue {
@@ -88,7 +87,9 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
   const approvalResolveRef = useRef<((decision: ApprovalDecision) => void) | null>(null);
   const runsRef = useRef(new Map<string, ChainExecutionRun>());
   const hostRef = useRef<DesignStudioCapabilityHost | null>(null);
-  const runtimeRef = useRef<SteeringRuntime | null>(null);
+  const runtimeRef = useRef<SteerableRuntime | null>(null);
+  const snapshotStoreRef = useRef<StateSnapshotAdapter | null>(null);
+  const routerRef = useRef<ScriptedIntentRouter | null>(null);
   const [records, setRecords] = useState<SteeringInvocationRecord[]>([]);
   const [notices, setNotices] = useState<SteeringNotice[]>([]);
   const [pendingApproval, setPendingApproval] = useState<ApprovalRequest | null>(null);
@@ -138,35 +139,29 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
   }
 
   if (!runtimeRef.current) {
-    const registry = createDesignStudioRegistry(hostRef.current);
-    const ledger = new InMemoryLedger();
     const snapshotStore = createDesignStudioSnapshotAdapter(hostRef.current);
-    const engine = new ExecutionEngine({
-      registry,
-      ledger,
-      snapshotStore,
+    runtimeRef.current = createSteerableRuntime({
+      declarations: createDesignStudioDeclarations(hostRef.current),
+      snapshotAdapter: snapshotStore,
       approvalHook,
     });
-
-    runtimeRef.current = {
-      registry,
-      ledger,
-      snapshotStore,
-      engine,
-      router: new ScriptedIntentRouter(),
-    };
+    snapshotStoreRef.current = snapshotStore;
+    routerRef.current = new ScriptedIntentRouter();
   }
 
   const runtime = runtimeRef.current;
 
-  if (!runtime) {
+  const snapshotStore = snapshotStoreRef.current;
+  const router = routerRef.current;
+
+  if (!runtime || !snapshotStore || !router) {
     throw new Error("Steering runtime failed to initialize.");
   }
   const refreshRecords = useCallback(() => {
-    setRecords([...runtime.ledger.getRecords()].reverse());
+    setRecords([...runtime.getSnapshot().records]);
   }, [runtime]);
 
-  useEffect(() => runtime.ledger.subscribe(refreshRecords), [runtime, refreshRecords]);
+  useEffect(() => runtime.subscribe(refreshRecords), [runtime, refreshRecords]);
 
   useEffect(() => {
     let disposed = false;
@@ -206,7 +201,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
       setIsSubmitting(true);
 
       try {
-        const route = await runtime.router.classify({
+        const route = await router.classify({
           intent: trimmed,
           sourceSurfaceId: currentSurfaceIdRef.current,
           registry: runtime.registry,
@@ -228,7 +223,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const run = runtime.engine.executeChain({
+        const run = runtime.executeChain({
           intent: trimmed,
           surfaceId: currentSurfaceIdRef.current,
           posture: postureRef.current,
@@ -303,13 +298,13 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
         step.undo,
         actionContext(
           runtime.registry,
-          runtime.snapshotStore,
+          snapshotStore,
           record.surfaceRef ?? currentSurfaceIdRef.current,
         ),
       );
       refreshRecords();
     },
-    [refreshRecords, runtime],
+    [refreshRecords, runtime, snapshotStore],
   );
 
   const undoAll = useCallback(
@@ -326,7 +321,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
           recordId,
           actionContext(
             runtime.registry,
-            runtime.snapshotStore,
+            snapshotStore,
             record.surfaceRef ?? currentSurfaceIdRef.current,
           ),
           { allowPartial: true },
@@ -336,7 +331,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
       setUndoToast(null);
       refreshRecords();
     },
-    [refreshRecords, runtime],
+    [refreshRecords, runtime, snapshotStore],
   );
 
   const value = useMemo<SteeringContextValue>(
@@ -373,7 +368,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <SteeringContext.Provider value={value}>{children}</SteeringContext.Provider>;
+  return <SteerableRuntimeProvider runtime={runtime}><SteeringContext.Provider value={value}>{children}</SteeringContext.Provider></SteerableRuntimeProvider>;
 }
 
 export function useSteering() {
