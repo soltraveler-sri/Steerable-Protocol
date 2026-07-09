@@ -1,0 +1,30 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.answer-quota-status
+title: Export quota question routes to answer
+description: Eval-authoring verification fixture pins the quota read-tool answer path derived from read-tool guidance.
+authoredBy: eval-authoring-skill-verification
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Authored by eval-authoring skill verification run.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-024
+given:
+  surfaceId: settings
+  utterance: "do I have exports left?"
+expected:
+  routeClass: answer
+  negativeCase: none
+  readTools:
+    - quota.get_status
+  answer:
+    messageContains:
+      - mock exports remain

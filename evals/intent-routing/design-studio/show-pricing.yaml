@@ -1,0 +1,36 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.show-pricing
+title: Show pricing routes to visibility action
+description: Eval-authoring verification fixture pins the show/hide sibling contrast for section.set_visibility.
+authoredBy: eval-authoring-skill-verification
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Authored by eval-authoring skill verification run.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "show pricing"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: section.set_visibility
+      params:
+        allowExtra: false
+        fields:
+          sectionId:
+            kind: exact
+            value: pricing
+          visible:
+            kind: exact
+            value: true

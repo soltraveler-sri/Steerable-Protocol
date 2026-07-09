@@ -1,0 +1,48 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.copy-update-runtime-demotion
+title: Runtime signal demotes creative copy edit
+description: Eval-authoring verification fixture pins a schema-safe normalized runtime reason code on a safe undoable action.
+authoredBy: eval-authoring-skill-verification
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Authored by eval-authoring skill verification run.
+requirementRefs:
+  - SA-POL-080
+  - SA-POL-086
+  - SA-POL-108
+given:
+  posturePreset: creative-tool
+  surfaceId: editor
+  runtimeSignals:
+    demoteOneRungReasonCode: eval_authoring_runtime_caution
+  proposed:
+    kind: action
+    steps:
+      - stepId: update_footer_body
+        actionId: section.update_copy
+        surfaceId: editor
+        params:
+          sectionId: footer
+          field: body
+          value: Request access to the private preview.
+expected:
+  negativeCase: none
+  chainMode: Optimistic chain
+  steps:
+    - stepId: update_footer_body
+      actionId: section.update_copy
+      resolvedMode: Optimistic chain
+      reasonCodes:
+        - preset_creative_tool_safe_undoable_instant_execution
+        - eval_authoring_runtime_caution
+  rationaleMustInclude:
+    - selected posture creative-tool
+    - eval_authoring_runtime_caution

@@ -1,0 +1,29 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.accent-missing-color-clarification
+title: Accent request without color asks clarification
+description: Eval-authoring verification fixture pins a params-implied boundary for palette.set_color rather than repeating a successful accent fixture.
+authoredBy: eval-authoring-skill-verification
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Authored by eval-authoring skill verification run.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-029
+given:
+  surfaceId: editor
+  utterance: "make the accent brighter"
+expected:
+  routeClass: clarification
+  negativeCase: clarification
+  clarification:
+    missing:
+      - field: hex color or supported color name
+        reason: The palette.set_color schema requires a concrete color value.
