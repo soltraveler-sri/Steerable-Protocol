@@ -45,7 +45,7 @@ The `<level>` token from `SA-CORE-080` has exactly these values in this draft: `
 | **SA-CONF-007** | Minimal+ | MUST | Each steering action has exactly one authoritative declaration source. | `SA-CORE-050`, `SA-DECL-002`, `SA-DECL-030`, `SA-DECL-093` | List product-changing steering actions from registry, prompts, tools, docs, fixtures, and bridge code; verify each maps back to one action declaration and that no second action table defines meaning. |
 | **SA-CONF-008** | Minimal+ | MUST | The runtime registry uses declarations as its compile source. | `SA-CORE-027`, `SA-DECL-090` | Trace registry construction; verify runtime capability lookup consumes declared actions, read tools, facts, and surfaces rather than handwritten runtime-only tool entries. |
 | **SA-CONF-009** | Minimal+ | MUST | Declared capability IDs satisfy the spec identity contract. | `SA-DECL-010`, `SA-DECL-011`, `SA-DECL-012`, `SA-LED-009` | Dump all declaration IDs and ledger/test references; check uniqueness, grammar, and absence of aliases or reused IDs across migrations, saved workflows, fixtures, and ledgers where history is available. |
-| **SA-CONF-010** | Minimal+ | MUST | Pending spec clarification (#41): action ID final segments use `verb_noun` unless the non-machine-checkable product-command exception is clarified. | `SA-DECL-013` | List action IDs; verify final segments contain a verb/noun separator where objectively checkable, and mark exceptions pending #41 instead of inventing a local product-command test. |
+| **SA-CONF-010** | Minimal+ | MUST | Action ID final segments satisfy the `verb_noun` or declared established-product-command exception contract. | `SA-DECL-013`, `SA-DECL-054` | List action IDs; verify every final segment contains a verb/noun separator, or that its declaration has exactly the `idException` object required by `SA-DECL-054`. |
 | **SA-CONF-011** | Minimal+ | MUST | Capability prose satisfies the declaration prose contract. | `SA-DECL-014`, `SA-DECL-015`, `SA-DECL-104`, `SA-EXEC-206` | Inspect declarations and generated activity/approval text; verify title/description exist, describe the capability, and policy facts come from typed metadata rather than prose. |
 | **SA-CONF-012** | Minimal+ | MUST | Parameter-bearing declaration fields satisfy the strict-schema contract. | `SA-DECL-016`, `SA-DECL-017`, `SA-DECL-035`, `SA-DECL-064`, `SA-CTX-024`, `SA-CTX-042` | Locate schema parsers or JSON Schemas; run or inspect tests with extra keys and wrong types for representative actions/read tools/facts; verify rejection before executor/query code runs. |
 | **SA-CONF-013** | Minimal+ | MUST | Structured parameters are not replaced by one flattened natural-language string when distinct inputs exist. | `SA-DECL-018` | Search declarations for single `text`, `prompt`, `instruction`, or `input` params; compare executor use to see whether separable fields such as IDs, enum choices, amounts, or booleans are hidden in prose. |
@@ -56,8 +56,8 @@ The `<level>` token from `SA-CORE-080` has exactly these values in this draft: `
 | **SA-CONF-018** | Minimal+ | MUST | Top-level facts satisfy the finite-enumerability contract. | `SA-DECL-074`, `SA-CTX-022`, `SA-CTX-023`, `SA-CTX-030`, `SA-CTX-149` | Inspect each facts declaration; verify the declared `facts` list is finite, has stable keys, and `publish()` cannot create data-dependent top-level keys outside that list. |
 | **SA-CONF-019** | Minimal+ | MUST | Facts and read-tool outputs satisfy the bounded-context contract. | `SA-DECL-077`, `SA-DECL-078`, `SA-CTX-027`, `SA-CTX-028`, `SA-CTX-043` | Inspect schemas and publishers/queries; sample outputs in tests; search for DOM serialization, screenshots, raw stores, secrets, or recursive object returns in facts/read tools. |
 | **SA-CONF-020** | Minimal+ | MUST | Surfaces satisfy the declaration and liveness contract. | `SA-CORE-026`, `SA-DECL-080`, `SA-DECL-081`, `SA-DECL-083`, `SA-DECL-084`, `SA-DECL-086`, `SA-EXEC-160`, `SA-EXEC-162` | Inspect surface declarations and route/mode lifecycle code; verify surfaces list capability IDs, reject unknown refs, register when live, deregister when unavailable, and use declared surface IDs as identity. |
-| **SA-CONF-021** | Minimal+ | MUST | Pending spec clarification (#41): precondition tokens are registry-checkable, including `surface:<surface-key>`, without resolving the `SA-DECL-012` versus `SA-DECL-022` grammar tension locally. | `SA-DECL-019`, `SA-DECL-022`, `SA-DECL-045`, `SA-DECL-066`, `SA-DECL-085` | List precondition tokens and their evaluators; verify tokens are stable and registry-checkable, but mark colon-containing surface token grammar questions pending #41. |
-| **SA-CONF-022** | Minimal+ | MUST | Pending spec clarification (#41): multi-surface availability is audited without inventing OR-style surface preconditions. | `SA-DECL-022`, `SA-DECL-045`, `SA-DECL-085`, `SA-EXEC-168`, `SA-POL-105`, `SA-POL-133` | Find capabilities available on multiple surfaces; verify availability can be checked from surface declarations and liveness, and mark any needed OR-precondition grammar pending #41. |
+| **SA-CONF-021** | Minimal+ | MUST | Precondition tokens satisfy the canonical surface-predicate grammar. | `SA-DECL-019`, `SA-DECL-022`, `SA-DECL-045`, `SA-DECL-066`, `SA-DECL-085` | List precondition tokens and their evaluators; verify tokens are stable and registry-checkable, each `surface:<surface-key>` names a declared simple surface ID, and the colon-bearing predicate is not validated as a capability ID. |
+| **SA-CONF-022** | Minimal+ | MUST | Multi-surface availability uses declared surface capability lists and conjunctive additional preconditions. | `SA-DECL-045`, `SA-DECL-085`, `SA-EXEC-168`, `SA-POL-105`, `SA-POL-133` | Find capabilities available on multiple surfaces; verify each is listed by every eligible surface, is available only while the current listed surface is live, and has no invented OR-style surface predicate. |
 | **SA-CONF-023** | Minimal+ | MUST | The registry satisfies the runtime queryability contract. | `SA-DECL-091`, `SA-DECL-092`, `SA-DECL-096`, `SA-BRIDGE-035` | Inspect registry APIs and compile-time validation; run duplicate ID, invalid schema, missing field, invalid enum, and unknown surface-capability-reference tests where available. |
 | **SA-CONF-024** | Minimal+ | MUST | Registry `externalExposure` materialization satisfies the door-two eligibility contract. | `SA-DECL-130`, `SA-DECL-131`, `SA-DECL-135`, `SA-DECL-136`, `SA-BRIDGE-020`, `SA-BRIDGE-024` | Dump compiled action/read-tool entries; verify omitted values become `none`, declared values are limited to `none`/`eligible`, and no bridge eligibility is inferred from names, risk, effects, or config. |
 | **SA-CONF-025** | Minimal+ | MUST | Downstream generated artifacts derive from the registry. | `SA-DECL-100`, `SA-DECL-101`, `SA-DECL-102`, `SA-DECL-103`, `SA-DECL-104`, `SA-DECL-105`, `SA-DECL-106`, `SA-DECL-107`, `SA-DECL-108`, `SA-DECL-109` | Search prompts, tool schemas, docs, fixture data, policy tables, and bridge generation; verify they import/consume registry data and do not redefine action facts. |
@@ -71,7 +71,7 @@ The `<level>` token from `SA-CORE-080` has exactly these values in this draft: `
 | **SA-CONF-033** | Minimal+ | MUST | Policy output satisfies the recordable-rationale contract. | `SA-POL-106`, `SA-POL-107`, `SA-POL-108`, `SA-POL-109`, `SA-LED-050`, `SA-LED-051`, `SA-LED-052` | Inspect policy result type and ledger policy records; verify action IDs, declaration metadata, posture, overrides, effect floors, confirmation floor, grant use, runtime demotions, final mode, and reason codes are present. |
 | **SA-CONF-034** | Minimal+ | MUST | The autonomy ladder satisfies the framework mode contract. | `SA-POL-080`, `SA-POL-081`, `SA-POL-082`, `SA-POL-083`, `SA-POL-084`, `SA-POL-085`, `SA-POL-086`, `SA-POL-087`, `SA-POL-088`, `SA-POL-089`, `SA-POL-090`, `SA-POL-091`, `SA-POL-092`, `SA-POL-093`, `SA-POL-094`, `SA-POL-095`, `SA-POL-096`, `SA-POL-097` | Inspect autonomy-mode enum/order and tests; verify `Read-only` does not execute actions and execution floors choose the least autonomous applicable execution mode. |
 | **SA-CONF-035** | Full | MUST | Framework posture presets define complete default mappings for every risk-by-reversibility cell. | `SA-POL-140`, `SA-POL-141`, `SA-POL-142`, `SA-POL-143`, `SA-POL-145`, `SA-POL-146`, `SA-POL-147` | Inspect preset mapping tables/config and tests; verify `creative-tool`, `business-app`, and `sensitive-domain` all have complete 4x3 grids outside declarations. |
-| **SA-CONF-036** | Minimal+ | MUST | Pending spec clarification (#41): effect-floor rationale records include floor values and `applied` semantics without inventing an interpretation of ambiguous "applied." | `SA-POL-144`, `SA-POL-160`, `SA-POL-161`, `SA-POL-162`, `SA-POL-163`, `SA-POL-164`, `SA-POL-165`, `SA-POL-166`, `SA-POL-167`, `SA-POL-168`, `SA-POL-169`, `SA-POL-170`, `SA-POL-171`, `SA-POL-172`, `SA-POL-108` | Inspect effect-floor code and rationale output; verify floor modes match the tables, but mark exact `applied` truth-table expectations pending #41. |
+| **SA-CONF-036** | Minimal+ | MUST | Effect-floor rationale records satisfy the deterministic `applied` contract. | `SA-POL-144`, `SA-POL-160`, `SA-POL-161`, `SA-POL-162`, `SA-POL-163`, `SA-POL-164`, `SA-POL-165`, `SA-POL-166`, `SA-POL-167`, `SA-POL-168`, `SA-POL-169`, `SA-POL-170`, `SA-POL-171`, `SA-POL-172`, `SA-POL-173`, `SA-POL-108` | Inspect effect-floor code and rationale output; verify `applied` is true precisely for a candidate floor at least as restrictive as the mode immediately before its evaluation, including equal floors, and false for no-floor or already-stricter cases. |
 | **SA-CONF-037** | Minimal+ | MUST | `confirmation: always` imposes a gated floor and cannot be suppressed by sticky grants. | `SA-POL-071`, `SA-POL-072`, `SA-POL-132`, `SA-EXEC-100` | Test or inspect an action with `confirmation: "always"` under grants and permissive posture; verify resolved mode is at least `Gated suffix`. |
 | **SA-CONF-038** | Minimal+ | MUST | Clean safe reversible actions are not gated or refused by framework defaults solely because an agent is involved. | `SA-CORE-053`, `SA-CORE-055`, `SA-POL-073`, `SA-POL-091`, `SA-POL-125`, `SA-POL-146`, `SA-EXEC-004`, `SA-EXEC-006`, `SA-EXEC-031`, `SA-EXEC-032`, `SA-EXEC-111`, `SA-EXEC-143`, `SA-EXEC-190`, `SA-EXEC-191` | Find actions with `risk: safe`, `undoable`/`snapshot`, no external/cost/sensitive effects, and `confirmation: never`; run policy/router tests and inspect defaults for hidden universal gates, plans, loops, or confidence demotions. |
 | **SA-CONF-039** | Minimal+ | MUST | User autonomy settings can lower autonomy relative to developer defaults. | `SA-POL-110`, `SA-POL-111` | Inspect policy inputs and tests for user setting floors; verify lowering is supported and any raising behavior is explicit developer policy. |
@@ -128,30 +128,30 @@ The `<level>` token from `SA-CORE-080` has exactly these values in this draft: `
 
 ## 5. MUST Coverage Audit (Informative)
 
-The audit below covers every MUST-bearing requirement ID in the current spec suite. Counted source requirements: 513. Unverifiable-by-inspection entries: 0. Four checklist items are executable but marked pending spec clarification (#41).
+The audit below covers every MUST-bearing requirement ID in the current spec suite. Counted source requirements: 515. Unverifiable-by-inspection entries: 0. Issue #41's four prior checklist ambiguities are resolved by the cited requirements.
 
 | Spec | MUST-bearing IDs | Checklist coverage | Unverifiable-by-inspection |
 |---|---|---|---|
 | `SA-CORE` | `SA-CORE-001-008`, `SA-CORE-010`, `SA-CORE-050-058`, `SA-CORE-070-071`, `SA-CORE-080-084`, `SA-CORE-090` | `SA-CONF-001-008`, `SA-CONF-025-026`, `SA-CONF-031`, `SA-CONF-038`, `SA-CONF-087-089`, closing table | None. Spec-authoring conventions are covered by this document's headings, ID scheme, and closing table. |
-| `SA-DECL` | `SA-DECL-001-002`, `SA-DECL-004-006`, `SA-DECL-010-022`, `SA-DECL-030-033`, `SA-DECL-035-050`, `SA-DECL-052-053`, `SA-DECL-060-077`, `SA-DECL-080-081`, `SA-DECL-083-087`, `SA-DECL-090-092`, `SA-DECL-094-096`, `SA-DECL-100-109`, `SA-DECL-120`, `SA-DECL-130-136` | `SA-CONF-006-026`, `SA-CONF-029`, `SA-CONF-047`, `SA-CONF-075`, `SA-CONF-081`, `SA-CONF-084-085`, `SA-CONF-087-089` | None. `SA-DECL-013`, `SA-DECL-022`, and OR-style precondition consequences are pending #41, not silently resolved. |
-| `SA-POL` | `SA-POL-001-011`, `SA-POL-020-024`, `SA-POL-026-034`, `SA-POL-040-048`, `SA-POL-060`, `SA-POL-063-073`, `SA-POL-080-097`, `SA-POL-100-110`, `SA-POL-113-114`, `SA-POL-120`, `SA-POL-122-133`, `SA-POL-140-147`, `SA-POL-160-170`, `SA-POL-180` | `SA-CONF-027-043`, `SA-CONF-051`, `SA-CONF-057`, `SA-CONF-061-065`, `SA-CONF-072`, `SA-CONF-074`, `SA-CONF-087-089` | None. Effect-floor `applied` rationale semantics are pending #41. |
+| `SA-DECL` | `SA-DECL-001-002`, `SA-DECL-004-006`, `SA-DECL-010-022`, `SA-DECL-030-033`, `SA-DECL-035-050`, `SA-DECL-052-054`, `SA-DECL-060-077`, `SA-DECL-080-081`, `SA-DECL-083-087`, `SA-DECL-090-092`, `SA-DECL-094-096`, `SA-DECL-100-109`, `SA-DECL-120`, `SA-DECL-130-136` | `SA-CONF-006-026`, `SA-CONF-029`, `SA-CONF-047`, `SA-CONF-075`, `SA-CONF-081`, `SA-CONF-084-085`, `SA-CONF-087-089` | None. Issue #41 resolves `SA-DECL-013`, `SA-DECL-022`, and multi-surface availability in `SA-DECL-045` and `SA-DECL-085`. |
+| `SA-POL` | `SA-POL-001-011`, `SA-POL-020-024`, `SA-POL-026-034`, `SA-POL-040-048`, `SA-POL-060`, `SA-POL-063-073`, `SA-POL-080-097`, `SA-POL-100-110`, `SA-POL-113-114`, `SA-POL-120`, `SA-POL-122-133`, `SA-POL-140-147`, `SA-POL-160-170`, `SA-POL-173`, `SA-POL-180` | `SA-CONF-027-043`, `SA-CONF-051`, `SA-CONF-057`, `SA-CONF-061-065`, `SA-CONF-072`, `SA-CONF-074`, `SA-CONF-087-089` | None. Issue #41 resolves effect-floor `applied` rationale semantics in `SA-POL-173`. |
 | `SA-CTX` | `SA-CTX-001-009`, `SA-CTX-020-027`, `SA-CTX-030-031`, `SA-CTX-040`, `SA-CTX-042-044`, `SA-CTX-046`, `SA-CTX-060-063`, `SA-CTX-067-068`, `SA-CTX-080-081`, `SA-CTX-083-086`, `SA-CTX-101`, `SA-CTX-103-106`, `SA-CTX-120-126`, `SA-CTX-140` | `SA-CONF-017-019`, `SA-CONF-044-052`, `SA-CONF-087-089` | None. |
 | `SA-EXEC` | `SA-EXEC-001-012`, `SA-EXEC-020-033`, `SA-EXEC-035`, `SA-EXEC-040-047`, `SA-EXEC-060-068`, `SA-EXEC-080-082`, `SA-EXEC-084-098`, `SA-EXEC-100`, `SA-EXEC-110-111`, `SA-EXEC-113-120`, `SA-EXEC-130-136`, `SA-EXEC-139-144`, `SA-EXEC-160-179`, `SA-EXEC-190-194`, `SA-EXEC-200-205`, `SA-EXEC-240` | `SA-CONF-015`, `SA-CONF-031`, `SA-CONF-038`, `SA-CONF-053-068`, `SA-CONF-087-089` | None. Full-path requirements for tool loop and full plan preview are Full-level checks, not minimal-level requirements. |
 | `SA-LED` | `SA-LED-001-004`, `SA-LED-006`, `SA-LED-008-010`, `SA-LED-020-039`, `SA-LED-050-055`, `SA-LED-061-064`, `SA-LED-070-077`, `SA-LED-080-088`, `SA-LED-090-097`, `SA-LED-099-100`, `SA-LED-110-120`, `SA-LED-130-133`, `SA-LED-140-141`, `SA-LED-143-146`, `SA-LED-160` | `SA-CONF-009`, `SA-CONF-033`, `SA-CONF-051`, `SA-CONF-067`, `SA-CONF-069-081`, `SA-CONF-087-089` | None. |
 | `SA-BRIDGE` | `SA-BRIDGE-001-004`, `SA-BRIDGE-010-016`, `SA-BRIDGE-020-025`, `SA-BRIDGE-030-036`, `SA-BRIDGE-040-048`, `SA-BRIDGE-070` | `SA-CONF-024`, `SA-CONF-026`, `SA-CONF-068`, `SA-CONF-082-089` | None. Door two remains conditional unless exposed or claimed. |
 
-## 6. Pending Clarifications and Spec Gaps (Informative)
+## 6. Issue #41 Resolution Map (Informative)
 
-The following checklist items depend on known issue #41 findings and must remain pending until the underlying spec language is clarified:
+The four findings previously marked pending are resolved, so `SA-CONF-010`, `SA-CONF-021`, `SA-CONF-022`, and `SA-CONF-036` now have decisive pass/fail procedures.
 
-| Checklist item | Gap |
-|---|---|
-| `SA-CONF-010` | `SA-DECL-013` allows an established-product-command exception to `verb_noun`, but that exception is not machine-checkable. |
-| `SA-CONF-021` | `SA-DECL-012` lowercase dot-segment ID grammar conflicts with `SA-DECL-022` reserving `surface:<surface-key>` predicate tokens. |
-| `SA-CONF-022` | The spec has no OR-style precondition grammar, so multi-surface availability must not be solved by local invention. |
-| `SA-CONF-036` | `SA-POL` effect-floor rationale uses `applied` without a fully unambiguous machine-checkable rule for all equal-floor and no-floor cases. |
+| Finding | Normative edit | Checklist resolution |
+|---|---|---|
+| Established-product-command exception was not machine-checkable | `SA-DECL-013`, `SA-DECL-054` define a closed `idException` object. | `SA-CONF-010` checks `verb_noun` or exactly that object. |
+| Capability-ID grammar conflicted with `surface:<key>` predicates | `SA-DECL-012`, `SA-DECL-022` separate dotted capability IDs, simple surface IDs, and predicate tokens. | `SA-CONF-021` validates the surface key against declared surfaces. |
+| Multi-surface availability lacked an OR grammar | `SA-DECL-045`, `SA-DECL-085` define surface capability lists as the disjunctive scope and preconditions as conjunctive. | `SA-CONF-022` checks that declared pattern. |
+| Effect-floor `applied` had no truth table | `SA-POL-173` defines participation against the incoming mode. | `SA-CONF-036` checks candidate, equal, no-floor, and already-stricter cases. |
 
-No additional spec gaps were discovered while writing this checklist.
+PR description mapping: this issue resolves all four findings above and **Closes #41** alongside issue #59.
 
 ## 7. Anti-Pattern Coverage (Informative)
 
@@ -177,7 +177,7 @@ npm run build
 
 Command results: `npx vitest run` passed 3 test files and 21 tests; `npm run build` passed `tsc -b` and `vite build`.
 
-Result summary: 77 pass, 0 flagged, 8 documented exceptions, 4 pending spec clarification (#41). No example fixes were made.
+Result summary: 81 pass, 0 flagged, 8 documented exceptions, 0 pending spec clarification. No example fixes were made: the existing declaration and proto-runtime patterns conform to the clarified rules.
 
 Documented exceptions:
 
@@ -197,7 +197,7 @@ Documented exceptions:
 | `SA-CONF-007` | Pass | `designStudioCapabilities.ts` is the declaration source for steering actions. |
 | `SA-CONF-008` | Pass | `createDesignStudioRegistry` compiles actions, read tools, facts, and surfaces. |
 | `SA-CONF-009` | Pass | Capability IDs are unique dot-segment strings; tests assert registry counts and references. |
-| `SA-CONF-010` | Pending spec clarification | All action IDs are `verb_noun`, but exception criteria remain pending #41. |
+| `SA-CONF-010` | Pass | All action IDs are `verb_noun`; no `idException` metadata is needed. |
 | `SA-CONF-011` | Pass | Trail titles/descriptions derive from declarations in `trail.ts` and router tests. |
 | `SA-CONF-012` | Pass | Strict schemas reject extra params; `palette.set_color` test covers this. |
 | `SA-CONF-013` | Pass | Distinct inputs such as token/hex, section/field/value, and posture are structured. |
@@ -208,8 +208,8 @@ Documented exceptions:
 | `SA-CONF-018` | Pass | Facts tests assert published keys exactly match finite declaration keys. |
 | `SA-CONF-019` | Pass | Facts/read tools return summaries, IDs, counts, palette/type objects, and quota state. |
 | `SA-CONF-020` | Pass | Surfaces declare capability IDs and route code registers/deregisters current surface. |
-| `SA-CONF-021` | Pending spec clarification | `surface:<id>` preconditions work in registry code; grammar tension remains pending #41. |
-| `SA-CONF-022` | Pending spec clarification | Multi-surface `project.export_project` is represented by surface capability lists, not OR preconditions; OR grammar remains pending #41. |
+| `SA-CONF-021` | Pass | `surface:<id>` preconditions resolve against simple declared `editor`, `templates`, and `settings` surface IDs, while capability IDs remain dotted. |
+| `SA-CONF-022` | Pass | Multi-surface `project.export_project` is listed by the `editor` and `settings` surfaces with no OR-style precondition. |
 | `SA-CONF-023` | Pass | `CapabilityRegistry` validates duplicate IDs, field shapes, value sets, and surface references. |
 | `SA-CONF-024` | Pass | Registry materializes `externalExposure: "none"`; tests assert all actions/read tools. |
 | `SA-CONF-025` | Pass | Policy, trail copy, router fixtures, and README matrices consume registry declaration IDs. |
@@ -223,7 +223,7 @@ Documented exceptions:
 | `SA-CONF-033` | Pass | Runtime tests assert `SA-POL-108` rationale fields and redacted eval traces. |
 | `SA-CONF-034` | Pass | `policy.ts` defines seven modes and ordering; tests cover read/gate outcomes. |
 | `SA-CONF-035` | Pass | `policy.ts` contains complete grids for all three presets. |
-| `SA-CONF-036` | Pending spec clarification | Effect floors and `applied` flags exist and are tested; exact semantics remain pending #41. |
+| `SA-CONF-036` | Pass | `policy.ts` records a candidate equal-or-stricter incoming effect floor as `applied`, and no-floor or already-stricter cases as false. |
 | `SA-CONF-037` | Pass | `project.reset_project` uses `confirmation: "always"` and resolves to a gate. |
 | `SA-CONF-038` | Pass | Router tests assert safe reversible routes are not gated under `creative-tool`. |
 | `SA-CONF-039` | Pass | Policy supports `userMinimumMode` lowering. |
@@ -290,5 +290,5 @@ Documented exceptions:
 | **SA-CONF-094** | That Full MUST failures block a full claim. | Whether maturity features such as tool-loop support, lower-rung context, durable audit, or door two are in scope for this release. |
 | **SA-CONF-095** | That door-two checks are conditional on exposing or claiming door two. | Whether door two is exposed at all, and which eligible capabilities are published. |
 | **SA-CONF-096** | That SHOULD failures are reported as flags rather than silent passes. | Which flagged recommendations to fix before release. |
-| **SA-CONF-097** | That pending spec clarifications cannot be locally resolved by folklore. | Whether to wait for clarification, avoid the ambiguous shape, or document an exception until the spec changes. |
+| **SA-CONF-097** | That unresolved spec clarifications cannot be locally resolved by folklore. | Whether to wait for clarification, avoid the ambiguous shape, or document an exception until the spec changes. |
 | **SA-CONF-098** | That conformance evidence must be item-level and reproducible by a coding agent. | Which code paths, tests, runtime probes, screenshots, or audit artifacts provide the evidence. |

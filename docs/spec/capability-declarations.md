@@ -32,8 +32,8 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 
 - **SA-DECL-010:** Every declared capability MUST have a stable `id` unique within the registry.
 - **SA-DECL-011:** Once an `id` is referenced by ledgers, fixtures, saved workflows, policy overrides, or external surfaces, an implementation MUST treat that `id` as stable and MUST NOT reuse it for a different capability meaning.
-- **SA-DECL-012:** Capability IDs MUST be lowercase ASCII identifiers composed of dot-separated segments using letters, digits, and underscores, with at least one namespace segment before the final segment.
-- **SA-DECL-013:** Action IDs MUST use a final `verb_noun` segment, as in `palette.set_color`, unless the action represents an established product command whose stable product name would be made less clear by that form.
+- **SA-DECL-012:** Action, read-tool, and facts IDs MUST be lowercase ASCII identifiers composed of dot-separated segments using letters, digits, and underscores, with at least one namespace segment before the final segment. A surface ID is instead a simple lowercase ASCII key composed of letters, digits, underscores, or hyphens and MUST NOT contain a dot or colon. This distinction resolves issue #41's surface-ID grammar tension: `surface:<surface-key>` is a predicate token, not a capability ID.
+- **SA-DECL-013:** An action ID final segment MUST use the `verb_noun` form, as in `palette.set_color`, unless the declaration supplies the `idException` metadata defined by `SA-DECL-054` for an established product command. A registry validator MUST reject a non-`verb_noun` final segment without that metadata. This resolves issue #41's non-machine-checkable exception.
 - **SA-DECL-014:** Every declared capability MUST include `title` and `description` fields suitable for user-facing activity, documentation, and generated review surfaces.
 - **SA-DECL-015:** `title` and `description` MUST describe what the capability is and does; they MUST NOT encode policy outcomes, approval workflows, or facts already carried by typed fields such as `risk`, `effects`, `reads`, or `writes`.
 - **SA-DECL-016:** Any declaration field that accepts parameters or returns values MUST use a strict, typed schema that can be expressed as JSON Schema or an equivalently precise language-neutral schema.
@@ -42,7 +42,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-019:** State keys in `reads`, `writes`, and facts MUST be stable dot-separated identifiers whose taxonomy is owned by the integrating developer.
 - **SA-DECL-020:** State keys SHOULD be granular enough to name the smallest meaningful product state region needed for policy, context, fixtures, and dependency analysis, but MUST NOT expose private implementation paths as the normative namespace.
 - **SA-DECL-021:** A declaration MUST NOT duplicate the same fact in multiple fields where the copies can disagree.
-- **SA-DECL-022:** Preconditions MUST be stable registry-checkable predicate tokens; the token form `surface:<surface-key>` is reserved for surface availability predicates and MUST accept the north-star form `surface:design-studio`.
+- **SA-DECL-022:** Preconditions MUST be stable registry-checkable predicate tokens. The token form `surface:<surface-key>` is reserved for surface availability predicates, where `<surface-key>` MUST exactly equal a declared simple surface ID; the token itself is exempt from the capability-ID grammar in `SA-DECL-012`. A registry MUST treat an unknown surface key as unsatisfied when evaluating such a predicate. The north-star form `surface:design-studio` remains valid.
 
 ## 5. Action Declarations (Normative)
 
@@ -50,7 +50,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-031:** Mutation, navigation, side effects, remote writes, and destructive operations performed through Steerable Apps MUST occur only through declared action executors.
 - **SA-DECL-032:** Model output for an action MUST be treated as an untrusted proposal until it validates against the action declaration, registry availability, and policy.
 - **SA-DECL-033:** An action declaration MUST include these required fields: `id`, `title`, `description`, `params`, `reads`, `writes`, `risk`, `reversibility`, `effects`, `confirmation`, `preconditions`, `execute`, `guidance`, and `examples`.
-- **SA-DECL-034:** The optional action fields are `undo`, `observe`, and `externalExposure`; omitting any required field is non-conformant.
+- **SA-DECL-034:** The optional action fields are `undo`, `observe`, `externalExposure`, and `idException`; omitting any required field is non-conformant.
 - **SA-DECL-035:** `params` MUST be a strict typed schema for the executor inputs. An action with no inputs MUST declare an empty object schema rather than omit `params`.
 - **SA-DECL-036:** `reads` MUST list the state keys the action needs to inspect or rely on. An action with no state dependencies MUST declare an empty list rather than omit `reads`.
 - **SA-DECL-037:** `writes` MUST list the state keys the action can mutate or externally affect. An action that performs no mutation or side effect MUST declare an empty list rather than omit `writes`.
@@ -61,7 +61,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-042:** `effects.cost` MUST be one of exactly `none`, `quota`, or `money`.
 - **SA-DECL-043:** `effects.sensitive` MUST be a boolean indicating whether execution can expose, transmit, or transform sensitive data.
 - **SA-DECL-044:** `confirmation` MUST be one of exactly `never`, `policy`, or `always`.
-- **SA-DECL-045:** `preconditions` MUST list registry-checkable availability predicates, including surface predicates such as `surface:design-studio` when an action is surface-scoped. An action with no preconditions MUST declare an empty list rather than omit `preconditions`.
+- **SA-DECL-045:** `preconditions` MUST list registry-checkable availability predicates, including a `surface:<surface-key>` predicate when an action is restricted to one declared surface. Preconditions are conjunctive. Multi-surface availability MUST be expressed by listing the same capability in each eligible surface declaration; a capability listed on more than one surface is eligible when the current live surface is any one of those surfaces, so it MUST NOT invent OR-style surface predicates. Additional preconditions still apply on every eligible surface. An action with no preconditions MUST declare an empty list rather than omit `preconditions`. This resolves issue #41's multi-surface availability finding.
 - **SA-DECL-046:** `execute` MUST be a trusted app-owned function, command handler, mutation endpoint, or equivalent executor that is not controlled by the model.
 - **SA-DECL-047:** `guidance` MUST provide concise agent-facing usage guidance for when to choose the action and any important distinction from neighboring actions.
 - **SA-DECL-048:** `examples` MUST contain at least one example mapping a realistic user request to valid action parameters.
@@ -70,6 +70,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-051:** If `reversibility.kind` is `irreversible`, `undo` MAY be omitted and omission means no undo handle is claimed by the declaration.
 - **SA-DECL-052:** The optional `observe` field, when present, MUST provide an action-specific post-execution observation that can be used by execution, ledger, or evaluation layers.
 - **SA-DECL-053:** If `observe` is omitted, downstream layers MAY use generic observation or no action-specific post-check, but omission MUST NOT change the executor contract.
+- **SA-DECL-054:** `idException`, when present, MUST be an object with exactly `kind: "established_product_command"` and a non-empty `productCommand` string. It MAY be present only when the action ID final segment does not use `verb_noun`; `productCommand` MUST name the stable product command retained by that final segment. The metadata is the machine-checkable escape required by `SA-DECL-013`.
 
 | Field | Required? | Omission semantics |
 |---|---:|---|
@@ -85,6 +86,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 | `confirmation` | Required | Non-conformant if omitted. |
 | `preconditions` | Required | Use an empty list for globally available actions. |
 | `externalExposure` | Optional | Registry compilation materializes `none` if omitted. |
+| `idException` | Optional | Omit for `verb_noun` action IDs; otherwise declare the `SA-DECL-054` established-product-command metadata. |
 | `execute` | Required | Non-conformant if omitted. |
 | `undo` | Optional | Required for `undoable`; snapshot-derived for `snapshot`; absent undo claim for `irreversible`. |
 | `observe` | Optional | No action-specific post-check if omitted. |
@@ -146,7 +148,7 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-082:** A surface declaration MAY include optional `location` metadata; if omitted, the surface is registry-addressable but does not claim runtime-navigable location metadata.
 - **SA-DECL-083:** `capabilities` MUST list the action, read tool, and facts declaration IDs that can be live on the surface.
 - **SA-DECL-084:** A runtime MUST register a surface with the registry when the surface is live and deregister it when the surface is no longer available for steering.
-- **SA-DECL-085:** Capability availability queries MUST evaluate both surface liveness and capability preconditions.
+- **SA-DECL-085:** Capability availability queries MUST evaluate current-surface liveness, that surface's capability list, and capability preconditions. A capability listed on multiple surfaces is available when any current live surface listing it satisfies its preconditions; surface lists therefore provide the disjunctive multi-surface scope described by `SA-DECL-045`.
 - **SA-DECL-086:** Surface registration MUST be sufficient for downstream execution specifications to identify a destination surface and determine whether its declared capabilities have registered.
 - **SA-DECL-087:** Surface declarations MUST NOT define the cross-surface execution algorithm, wait timeout, repair behavior, or user-interface presentation; those semantics belong to `SA-EXEC`.
 
@@ -269,9 +271,10 @@ The following issue-level decisions are recorded so later authors do not re-open
 1. Typed params are conceptual, strict, and JSON-Schema-expressible; zod and TypeScript syntax are examples only.
 2. Action policy metadata is required. Empty `params`, `reads`, `writes`, and `preconditions` are explicit values rather than omitted fields, so minimum declarations remain honest and machine-checkable.
 3. State key format is normative, but the taxonomy is developer-owned. This gives facts, read tools, fixtures, and capability queries stable handles without standardizing every product's domain model.
-4. Action IDs use stable lowercase namespaced IDs with a final `verb_noun` segment as the default requirement, because fixtures, ledgers, policy overrides, and generated external tools need durable references.
+4. Action, read-tool, and facts IDs use stable lowercase namespaced IDs; action IDs use a final `verb_noun` segment unless explicit established-product-command metadata supplies the machine-checkable exception. Surface IDs are simple keys, so `surface:<key>` is a predicate token rather than a capability ID. The Design Studio's `editor`, `templates`, and `settings` surface IDs and its dotted action/read-tool/facts IDs are conformant without code changes. (Issue #41 resolution.)
 5. `guidance` and `examples` are required declaration inputs; prompt assembly mechanics are runtime-specific, but model-facing knowledge must come from the declaration and registry.
-6. Door-two addition (issue #9): the declaration shape now includes optional `externalExposure` for actions and read tools because external eligibility is capability nature, while deployment enablement, caller identity, session trust, and autonomy outcomes remain policy inputs outside declarations. The field is optional with a registry-materialized `none` default (orchestrator adjustment): omission is the safe direction, the north-star §5 example remains conformant as written, and the meta-principle prefers a sane default over a mandatory field in every declaration.
+6. Multi-surface availability uses surface capability lists, not an OR predicate grammar. A single capability can appear on every eligible surface and is live on whichever listed surface is current; `preconditions` supply only conjunctive additional restrictions. The Design Studio's `project.export_project` uses this pattern for `editor` and `settings` and remains conformant without code changes. (Issue #41 resolution.)
+7. Door-two addition (issue #9): the declaration shape now includes optional `externalExposure` for actions and read tools because external eligibility is capability nature, while deployment enablement, caller identity, session trust, and autonomy outcomes remain policy inputs outside declarations. The field is optional with a registry-materialized `none` default (orchestrator adjustment): omission is the safe direction, the north-star §5 example remains conformant as written, and the meta-principle prefers a sane default over a mandatory field in every declaration.
 
 No conflict with the north-star was identified while writing this document.
 
