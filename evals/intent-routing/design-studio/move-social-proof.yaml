@@ -1,0 +1,36 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.move-social-proof
+title: Move social proof routes to section move
+description: Documented section reordering utterance maps to one declared action.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "move social proof up"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: section.move_section
+      params:
+        allowExtra: false
+        fields:
+          sectionId:
+            kind: exact
+            value: social-proof
+          direction:
+            kind: exact
+            value: up

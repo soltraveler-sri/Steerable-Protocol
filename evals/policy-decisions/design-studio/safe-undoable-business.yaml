@@ -1,0 +1,43 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.safe-undoable-business
+title: Business posture lowers same safe action
+description: Same palette change resolves to Optimistic chain under business-app.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-080
+  - SA-POL-086
+  - SA-POL-108
+given:
+  posturePreset: business-app
+  surfaceId: editor
+  proposed:
+    kind: action
+    steps:
+      - stepId: set_accent
+        actionId: palette.set_color
+        surfaceId: editor
+        params:
+          token: accent
+          hex: "#228B22"
+expected:
+  negativeCase: none
+  chainMode: Optimistic chain
+  steps:
+    - stepId: set_accent
+      actionId: palette.set_color
+      resolvedMode: Optimistic chain
+      reasonCodes:
+        - preset_business_app_safe_undoable_optimistic_chain
+  rationaleMustInclude:
+    - selected posture business-app

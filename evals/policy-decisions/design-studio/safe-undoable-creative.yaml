@@ -1,0 +1,43 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.safe-undoable-creative
+title: Creative posture executes safe undoable action instantly
+description: Safe undoable palette change resolves to Instant execution under creative-tool.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-080
+  - SA-POL-084
+  - SA-POL-108
+given:
+  posturePreset: creative-tool
+  surfaceId: editor
+  proposed:
+    kind: action
+    steps:
+      - stepId: set_accent
+        actionId: palette.set_color
+        surfaceId: editor
+        params:
+          token: accent
+          hex: "#228B22"
+expected:
+  negativeCase: none
+  chainMode: Instant execution
+  steps:
+    - stepId: set_accent
+      actionId: palette.set_color
+      resolvedMode: Instant execution
+      reasonCodes:
+        - preset_creative_tool_safe_undoable_instant_execution
+  rationaleMustInclude:
+    - selected posture creative-tool

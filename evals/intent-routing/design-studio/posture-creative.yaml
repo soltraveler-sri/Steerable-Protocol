@@ -1,0 +1,33 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.posture-creative
+title: Creative posture routes to policy action
+description: Documented Settings command switches back to creative-tool posture.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: settings
+  utterance: "switch posture to creative tool"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: policy.set_posture
+      params:
+        allowExtra: false
+        fields:
+          posture:
+            kind: exact
+            value: creative-tool

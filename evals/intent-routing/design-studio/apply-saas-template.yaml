@@ -1,0 +1,34 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.apply-saas-template
+title: SaaS template routes on Templates surface
+description: Documented Templates utterance routes to template.apply_template.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: templates
+  utterance: "apply the SaaS launch template"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: template.apply_template
+      surfaceId: templates
+      params:
+        allowExtra: false
+        fields:
+          templateId:
+            kind: exact
+            value: saas-launch

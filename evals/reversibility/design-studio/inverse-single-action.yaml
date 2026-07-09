@@ -1,0 +1,47 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: design-studio.reversibility.inverse-single-action
+title: Single-step inverse undo applies
+description: palette.set_color exposes a declared inverse and can be undone as one step.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-LED-070
+  - SA-LED-080
+given:
+  executed:
+    scope: single-action
+    steps:
+      - stepId: set_accent
+        actionId: palette.set_color
+        params:
+          token: accent
+          hex: "#228B22"
+        status: succeeded
+        reversibilityKind: undoable
+        undoMechanism: declared_inverse
+        undoHandleStatus: available
+    ledgerState:
+      surfaceId: editor
+      posturePreset: creative-tool
+  undoRequest:
+    scope: single-step
+    targetStepIds:
+      - set_accent
+expected:
+  negativeCase: none
+  undoOutcome: inverse-applied
+  order:
+    - set_accent
+  stepResults:
+    - stepId: set_accent
+      result: inverse-applied

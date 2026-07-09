@@ -1,0 +1,30 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.reset-project
+title: Reset routes to destructive action
+description: Documented Settings reset utterance maps to project.reset_project.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: settings
+  utterance: "reset the project"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: project.reset_project
+      params:
+        allowExtra: false
+        fields: {}

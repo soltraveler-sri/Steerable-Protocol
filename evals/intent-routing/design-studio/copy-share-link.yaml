@@ -1,0 +1,30 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.copy-share-link
+title: Copy share link routes to side-effect action
+description: Documented Settings utterance maps to share.copy_link.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: settings
+  utterance: "copy the share link"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: share.copy_link
+      params:
+        allowExtra: false
+        fields: {}

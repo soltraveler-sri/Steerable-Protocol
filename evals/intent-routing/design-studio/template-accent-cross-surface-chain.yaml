@@ -1,0 +1,51 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.template-accent-cross-surface-chain
+title: Template and accent routes to cross-surface chain
+description: Documented chain stays an action chain even though it crosses surfaces.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-026
+  - SA-EXEC-027
+given:
+  surfaceId: templates
+  utterance: "apply the SaaS launch template and make the accent forest green"
+expected:
+  routeClass: action chain
+  negativeCase: none
+  actions:
+    - actionId: template.apply_template
+      params:
+        allowExtra: false
+        fields:
+          templateId:
+            kind: exact
+            value: saas-launch
+    - actionId: surface.navigate_surface
+      params:
+        allowExtra: false
+        fields:
+          surfaceId:
+            kind: exact
+            value: editor
+    - actionId: palette.set_color
+      params:
+        allowExtra: false
+        fields:
+          token:
+            kind: exact
+            value: accent
+          hex:
+            kind: caseInsensitive
+            value: "#228B22"

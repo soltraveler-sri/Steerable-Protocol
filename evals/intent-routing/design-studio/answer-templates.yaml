@@ -1,0 +1,31 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.answer-templates
+title: Template question routes to answer
+description: Documented read-only template question uses the template list read tool.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-024
+given:
+  surfaceId: editor
+  utterance: "what templates are available?"
+expected:
+  routeClass: answer
+  negativeCase: none
+  readTools:
+    - template.list_available
+  answer:
+    messageContains:
+      - Available templates
+      - SaaS launch

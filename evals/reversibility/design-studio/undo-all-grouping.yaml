@@ -1,0 +1,59 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: design-studio.reversibility.undo-all-grouping
+title: Undo all groups reversible steps in reverse order
+description: Aggregate undo over a reversible chain attempts the most recent handle first.
+authoredBy: issue-17-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-LED-110
+  - SA-LED-112
+  - SA-LED-117
+given:
+  executed:
+    scope: chain
+    steps:
+      - stepId: apply_palette
+        actionId: palette.apply_preset
+        params:
+          presetId: citrus
+        status: succeeded
+        reversibilityKind: snapshot
+        undoMechanism: runtime_snapshot
+        undoHandleStatus: available
+      - stepId: set_font
+        actionId: typography.set_pairing
+        params:
+          pairing: modern
+        status: succeeded
+        reversibilityKind: undoable
+        undoMechanism: declared_inverse
+        undoHandleStatus: available
+    ledgerState:
+      surfaceId: editor
+      posturePreset: creative-tool
+  undoRequest:
+    scope: chain-executed-scope
+    targetStepIds:
+      - apply_palette
+      - set_font
+expected:
+  negativeCase: none
+  undoOutcome: undo-all-succeeded
+  order:
+    - set_font
+    - apply_palette
+  stepResults:
+    - stepId: apply_palette
+      result: snapshot-restored
+    - stepId: set_font
+      result: inverse-applied

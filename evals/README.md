@@ -11,19 +11,57 @@ evals/
   README.md
   package.json
   validate-fixtures.mjs
+  run-fixtures.mjs
+  quarantined-fixtures.json
   schemas/
     common.schema.json
     intent-routing.schema.json
     policy-decisions.schema.json
     reversibility.schema.json
     cross-surface.schema.json
+  intent-routing/design-studio/*.yaml
   intent-routing/samples/*.yaml
+  policy-decisions/design-studio/*.yaml
   policy-decisions/samples/*.yaml
+  reversibility/design-studio/*.yaml
   reversibility/samples/*.yaml
+  cross-surface/design-studio/*.yaml
   cross-surface/samples/*.yaml
 ```
 
-Full suite authoring and runtime assertions belong to a later runner issue. This directory intentionally ships only the format, schemas, samples, and schema validator.
+`samples/` remain illustrative format examples. Real executable suites live under a target-named directory such as `design-studio/`.
+
+## Validation and Runner
+
+From the Design Studio example, run:
+
+```bash
+npm run evals
+```
+
+The script validates all fixture YAML files and then runs non-sample fixtures against the Design Studio adapter. The command is wired from `examples/design-studio` rather than the repo root because this repository does not currently have a root package; the adapter is bundled from the example's installed TypeScript source before the plain Node runner imports it.
+
+The runner is deterministic and must not make network or model-provider calls. It exits nonzero for any unquarantined schema, target, route, policy, execution, or undo mismatch. Per-fixture failures print the expected value and actual value that differed.
+
+## Target Adapter Interface
+
+The runner binds to a target integration through a small adapter object:
+
+| Method | Purpose |
+|---|---|
+| `target` | Registry identity loaded by the adapter; fixtures must match `integrationId`, registry `id`, `version`, and `ref`. |
+| `route(fixture)` | Execute an `intent-routing` fixture through the target router and return route class, actions/read tools, params, clarification, or refusal. |
+| `resolve(fixture)` | Execute a `policy-decisions` fixture through the target policy resolver and return per-step modes, chain boundary, denial, and rationale text. |
+| `execute(fixture)` | Execute a `cross-surface` fixture through the target execution engine and return sequence, failure, preserved undo prefix, and trace facts. |
+| `undo(fixture)` | Execute a `reversibility` fixture through target ledger/undo seams and return undo outcome, attempted order, per-step results, and disclosures. |
+
+Design Studio's adapter lives at `examples/design-studio/src/steerable/evalAdapter.ts`. A new integration should implement the same five fields without changing `evals/run-fixtures.mjs`.
+
+## Failing Fixture Policy
+
+Unquarantined red fixtures fail the runner. If a fixture exposes a real product bug that cannot be fixed in the same task, keep the fixture in the suite and add an entry to `evals/quarantined-fixtures.json` with the fixture `id`, linked issue URL, owner, date, and reason. The runner reports quarantined failures separately and does not count them as ambient green. If a quarantined fixture starts passing, the runner fails with a stale-quarantine error so the entry is removed.
+
+There are currently no quarantined fixtures.
 
 ## Common Fields
 

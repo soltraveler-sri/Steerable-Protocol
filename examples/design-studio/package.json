@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "evals": "npm --prefix ../../evals ci && npm --prefix ../../evals run validate && npm --prefix ../../evals run evals -- --target=design-studio",
     "test": "vitest run",
     "preview": "vite preview"
   },
