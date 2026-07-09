@@ -1,0 +1,77 @@
+fixtureFormatVersion: "0.1.0"
+kind: cross-surface
+id: design-studio.cross-surface.settings-to-editor-success
+title: Settings chain continues into Editor
+description: Eval-authoring verification fixture pins a novel settings-to-editor success path with a reversible metadata prefix.
+authoredBy: eval-authoring-skill-verification
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Authored by eval-authoring skill verification run.
+requirementRefs:
+  - SA-EXEC-160
+  - SA-EXEC-164
+  - SA-EXEC-168
+  - SA-EXEC-169
+given:
+  startSurfaceId: settings
+  chain:
+    - stepId: update_tone
+      actionId: project.update_meta
+      targetSurfaceId: settings
+      params:
+        field: tone
+        value: premium
+      requiresCapabilities: []
+      reversiblePrefix: true
+    - stepId: navigate_editor
+      actionId: surface.navigate_surface
+      targetSurfaceId: settings
+      params:
+        surfaceId: editor
+      requiresCapabilities: []
+      reversiblePrefix: true
+    - stepId: set_hero_layout
+      actionId: layout.set_hero
+      targetSurfaceId: editor
+      params:
+        layout: stacked
+      requiresCapabilities:
+        - layout.set_hero
+      reversiblePrefix: true
+  registrationScenario:
+    targetSurfaceId: editor
+    timeoutMs: 50
+    registersAtMs: 1
+    capabilitiesAvailableAtMs: 1
+    userNavigation: none
+expected:
+  negativeCase: none
+  sequence:
+    - kind: navigate
+      stepId: navigate_editor
+      actionId: surface.navigate_surface
+      surfaceId: editor
+    - kind: await-surface-registration
+      surfaceId: editor
+      timeoutMs: 50
+    - kind: await-capabilities
+      surfaceId: editor
+      capabilityIds:
+        - layout.set_hero
+      timeoutMs: 50
+    - kind: continue
+      stepId: set_hero_layout
+      actionId: layout.set_hero
+      surfaceId: editor
+  preservedUndoStepIds:
+    - update_tone
+    - navigate_editor
+    - set_hero_layout
+  notExecutedStepIds: []

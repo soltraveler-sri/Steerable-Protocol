@@ -1,0 +1,47 @@
+fixtureFormatVersion: "0.1.0"
+kind: reversibility
+id: design-studio.reversibility.metadata-tone-inverse
+title: Settings metadata tone undo applies inverse
+description: Eval-authoring verification fixture pins project.update_meta undo from the Settings surface rather than repeating palette inverse undo.
+authoredBy: eval-authoring-skill-verification
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Authored by eval-authoring skill verification run.
+requirementRefs:
+  - SA-LED-070
+  - SA-LED-080
+given:
+  executed:
+    scope: single-action
+    steps:
+      - stepId: update_tone
+        actionId: project.update_meta
+        params:
+          field: tone
+          value: premium
+        status: succeeded
+        reversibilityKind: undoable
+        undoMechanism: declared_inverse
+        undoHandleStatus: available
+    ledgerState:
+      surfaceId: settings
+      posturePreset: creative-tool
+  undoRequest:
+    scope: single-step
+    targetStepIds:
+      - update_tone
+expected:
+  negativeCase: none
+  undoOutcome: inverse-applied
+  order:
+    - update_tone
+  stepResults:
+    - stepId: update_tone
+      result: inverse-applied

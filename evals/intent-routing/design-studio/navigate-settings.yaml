@@ -1,0 +1,34 @@
+fixtureFormatVersion: "0.1.0"
+kind: intent-routing
+id: design-studio.intent.navigate-settings
+title: Settings navigation routes to surface action
+description: Eval-authoring verification fixture pins the registry-derived navigation example without duplicating existing action examples.
+authoredBy: eval-authoring-skill-verification
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Authored by eval-authoring skill verification run.
+requirementRefs:
+  - SA-EXEC-020
+  - SA-EXEC-025
+given:
+  surfaceId: editor
+  utterance: "open settings"
+expected:
+  routeClass: single action
+  negativeCase: none
+  actions:
+    - actionId: surface.navigate_surface
+      surfaceId: editor
+      params:
+        allowExtra: false
+        fields:
+          surfaceId:
+            kind: exact
+            value: settings
