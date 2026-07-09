@@ -1,5 +1,4 @@
-import type { ActionStepRecord } from "./ledger";
-import type { CapabilityRegistry } from "./registry";
+import type { ActionStepRecord, CapabilityRegistry } from "@steerable/core";
 
 export function trailTitleForStep(
   registry: CapabilityRegistry,

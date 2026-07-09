@@ -1,8 +1,11 @@
 import { FormEvent, useState } from "react";
 import { useSteering } from "../steerable/SteeringContext";
-import type { SteeringInvocationRecord, StepStatus } from "../steerable/ledger";
-import type { ApprovalRequest } from "../steerable/execution";
-import type { DeclarationPolicyMetadata } from "../steerable/policy";
+import type {
+  ApprovalRequest,
+  DeclarationPolicyMetadata,
+  SteeringInvocationRecord,
+  StepStatus,
+} from "@steerable/core";
 import {
   canUndoStep,
   trailDescriptionForStep,

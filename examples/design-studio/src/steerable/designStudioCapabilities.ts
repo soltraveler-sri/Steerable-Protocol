@@ -13,7 +13,6 @@ import type {
   ProjectMeta,
   TypeScale,
 } from "../types";
-import type { PosturePreset } from "./policy";
 import {
   CapabilityRegistry,
   defineAction,
@@ -29,9 +28,10 @@ import {
   type StateKey,
   type StateSnapshot,
   type StateSnapshotAdapter,
-  type StrictParamSchema,
+  type StrictSchema,
   type SurfaceId,
-} from "./registry";
+  type PosturePreset,
+} from "@steerable/core";
 
 export const designStudioSurfaceIds = {
   editor: "editor",
@@ -166,7 +166,7 @@ const demoPostures = [
   "business-app",
 ] as const satisfies readonly Extract<PosturePreset, "creative-tool" | "business-app">[];
 
-const emptyObjectSchema: StrictParamSchema<EmptyParams> = {
+const emptyObjectSchema: StrictSchema<EmptyParams> = {
   ...emptyParamsSchema,
   jsonSchema: {
     type: "object",
@@ -1187,7 +1187,7 @@ function strictObjectSchema<Params extends object>(
   parseValues: (input: Record<string, unknown>) => Params,
   properties: Record<string, unknown>,
   required: readonly string[],
-): StrictParamSchema<Params> {
+): StrictSchema<Params> {
   return {
     parse(input: unknown): Params {
       if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -1315,7 +1315,7 @@ function fact(key: string, description: string, schema: unknown): FactEntry {
   return {
     key,
     description,
-    schema,
+    schema: { parse: (input) => input, jsonSchema: schema },
   };
 }
 

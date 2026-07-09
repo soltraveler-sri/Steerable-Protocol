@@ -3,19 +3,19 @@ import {
   DEFAULT_SURFACE_READINESS_TIMEOUT_MS,
   ExecutionEngine,
   RegistrySurfaceReadiness,
-  createManualApprovalController,
-} from "./execution";
-import { InMemoryLedger, type SteeringInvocationRecord } from "./ledger";
-import { resolveActionPolicy } from "./policy";
-import {
+  InMemoryLedger,
+  resolveActionPolicy,
   CapabilityRegistry,
   createStrictObjectSchema,
+  createMemorySnapshotStore,
+  extractLedgerTrace,
   defineAction,
   defineSurface,
   type ActionDeclaration,
   type AnyActionDeclaration,
-} from "./registry";
-import { createMemorySnapshotStore } from "./undo";
+  type SteeringInvocationRecord,
+} from "@steerable/core";
+import { createManualApprovalController } from "./testUtils";
 
 const hexSchema = createStrictObjectSchema<{ hex: string }>(["hex"], (input) => {
   if (typeof input.hex !== "string") {
@@ -463,7 +463,7 @@ describe("inline steerable proto-runtime", () => {
       }),
     );
 
-    const [trace] = ledger.extractEvalTrace({ redactSensitive: true });
+    const [trace] = extractLedgerTrace(ledger.getRecords(), { redactSensitive: true });
     expect(trace.steps[0].params).toBe("[redacted]");
     expect(trace.policy[0].finalMode).toBe("Instant execution");
   });

@@ -47,4 +47,4 @@ await undoAll(run);
 
 `useSteeringState` uses `useSyncExternalStore`, not polling. It tracks chains started through this runtime and pending calls to the supplied `ApprovalHook`; pass `pendingApproval` to your own approval UI. `useApprovalHook(handler)` creates a stable callback when a React component owns the approval handler.
 
-For an application-managed or durable ledger, the core `ActionLedger` currently has no record-read or subscription contract. The binding can refresh records exposed by an optional `getRecords()` method and always tracks its own dispatches, but externally-written ledger changes need an application state source until core adds a notification/read-model seam.
+`ActionLedger` provides `getRecords()` and `subscribe()`, so a durable application ledger can drive trail state directly. The binding refreshes when either runtime-dispatched or externally-written records change.

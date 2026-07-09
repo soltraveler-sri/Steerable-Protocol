@@ -11,3 +11,4 @@ The Stage-2 core package compiles SA-DECL declarations into a framework-agnostic
 - `SurfaceReadiness` is the public navigation/readiness seam: platform adapters await a declared surface and revalidate its next capability, with a 5000ms default.
 - `StateSnapshotAdapter` is the public state seam: app-owned capture/restore code supplies snapshot undo without exposing storage choices to core.
 - `ApprovalHook` is the public consent seam: product UI or services decide approved/declined for a declaration- and policy-derived scope; core never renders a gate.
+- `ActionLedger` exposes `getRecords()` and `subscribe()` so app-owned trail UI can reflect both runtime and external ledger writes without a parallel read model.

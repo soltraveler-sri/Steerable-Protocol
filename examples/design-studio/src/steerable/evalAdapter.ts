@@ -8,10 +8,11 @@ import type { DesignState, ProjectMeta } from "../types";
 import {
   ExecutionEngine,
   RegistrySurfaceReadiness,
+  InMemoryLedger,
+  extractLedgerTrace,
+  runUndoHandle,
+  undoAll as undoAllRecord,
   type ApprovalHook,
-} from "./execution";
-import { InMemoryLedger } from "./ledger";
-import {
   type AutonomyMode,
   type PolicyInputs,
   type PolicyRationale,
@@ -21,10 +22,10 @@ import {
   type ScopedGrant,
   resolveActionPolicy,
   resolveChainPolicy,
-} from "./policy";
+  type SurfaceId,
+} from "@steerable/core";
 import type { ActionIntentRoute } from "./router";
 import { ScriptedIntentRouter } from "./router";
-import type { SurfaceId } from "./registry";
 import {
   createDesignStudioRegistry,
   createDesignStudioSnapshotAdapter,
@@ -32,7 +33,6 @@ import {
   type DesignStudioCapabilityHost,
   type DesignStudioSurfaceId,
 } from "./designStudioCapabilities";
-import { runUndoHandle, undoAll as undoAllRecord } from "./undo";
 
 const fixedNow = new Date("2026-07-09T12:00:00.000Z");
 
@@ -336,7 +336,7 @@ async function execute(fixture: EvalFixture) {
     preservedUndoStepIds,
     notExecutedStepIds: failedOrSkipped,
     prefixUndo,
-    trace: harness.ledger.extractEvalTrace(),
+    trace: extractLedgerTrace(harness.ledger.getRecords()),
   };
 }
 
@@ -362,9 +362,7 @@ async function context(fixture: EvalFixture) {
 
       const params = readTool.params.parse(call.params);
       const result = await readTool.query(params, {
-        registry: harness.registry,
         surfaceId: given.surfaceId,
-        now: () => fixedNow,
       });
 
       return { id: readTool.id, result };
@@ -476,7 +474,7 @@ async function undo(fixture: EvalFixture) {
           message: undoResult.disclosure,
         }
       : undefined,
-    trace: harness.ledger.extractEvalTrace(),
+    trace: extractLedgerTrace(harness.ledger.getRecords()),
   };
 }
 

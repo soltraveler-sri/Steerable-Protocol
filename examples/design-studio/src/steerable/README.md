@@ -1,9 +1,6 @@
-# Inline Steerable Proto-Runtime
+# Design Studio steering integration
 
-This directory is an inline, disposable prototype for the Design Studio example.
-It is not a package, not a supported runtime, and not supported for copying into
-another app.
-
-The Steerable spec documents are canonical. This code exists only to prove the
-Sprint 3 registry, policy, execution, ledger, and undo contracts against a real
-example shape before any future extraction work.
+The Design Studio keeps only app-owned declarations, state adapters, deterministic
+router data, evaluation adapter, and product UI wiring here. Registry compilation,
+policy, execution, ledger, undo, and React runtime state come from
+`@steerable/core` and `@steerable/react`; this example is not a copyable runtime.

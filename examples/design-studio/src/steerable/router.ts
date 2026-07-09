@@ -4,7 +4,7 @@ import {
   designStudioSurfaceIds,
   type DesignStudioSurfaceId,
 } from "./designStudioCapabilities";
-import type { CapabilityRegistry, SurfaceId } from "./registry";
+import type { CapabilityRegistry, SurfaceId } from "@steerable/core";
 
 export type IntentRouteClass =
   | "answer"

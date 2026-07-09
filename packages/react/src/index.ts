@@ -57,8 +57,6 @@ export interface SteerableRuntime {
   getSnapshot(): SteerableState;
 }
 
-type ReadableLedger = ActionLedger & { getRecords?: () => SteeringInvocationRecord[] };
-
 /**
  * Creates the framework-neutral core runtime and a small event source for React.
  * State events cover work started through this runtime; external durable-ledger
@@ -77,8 +75,7 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
     listeners.forEach((listener) => listener());
   };
   const refreshRecords = () => {
-    const readable = ledger as ReadableLedger;
-    readable.getRecords?.().forEach((record) => records.set(record.recordId, record));
+    ledger.getRecords().forEach((record) => records.set(record.recordId, record));
   };
   const approvalHook: ApprovalHook = async (request) => {
     pendingApproval = request;
@@ -114,6 +111,10 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
 
   refreshRecords();
   snapshot = { records: Array.from(records.values()), pendingApproval };
+  ledger.subscribe(() => {
+    refreshRecords();
+    emit();
+  });
   return {
     registry,
     ledger,
