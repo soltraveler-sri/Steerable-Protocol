@@ -153,3 +153,28 @@ Contents: retrofit skill (distills everything); dry-run of the skill against an 
 5. **Exercised against the example.** Spec claims that can be exercised in `examples/design-studio` must be; divergence between spec and example is a release blocker in whichever direction the north-star says is wrong.
 6. **No premature packaging.** Nothing under `packages/`; the example's proto-runtime stays inline and unpublishable (§9, §11.6).
 7. **Zero-cost validation by default.** Dev, CI, and eval runs make no model API calls; live-model anything is opt-in and out of Stage-1 scope (repo cost discipline).
+
+---
+
+# Stage-2 addendum (added 2026-07-09, after the Stage-1 gate PASSED — see docs/plan/stage1-gate-review.md)
+
+Stage 1 closed with all 26 issues merged and the gate exercised for real (#24: PASS on re-run). Stage 2 per north-star §10: extract the smallest durable runtime, positioned as the policy-and-plan layer that rides on native tool calling / AI SDK / AG-UI — never a rival chat kit. Decisions:
+
+### D8 — Package scope: core + react now; next deferred [repo, explicit divergence]
+`packages/core` (framework-agnostic TS: registry, policy, execution, ledger interfaces, undo — the proto-runtime's proven seams `SurfaceReadiness`, `StateSnapshotAdapter`, `ApprovalHook` become core interfaces) and `packages/react` (provider, hooks, surface-registration binding). **`packages/next` is deferred** — divergence from §9's listing, with rationale: the repo has no Next.js consumer to prove a binding against, and building one means a second example app (overbuild risk, §11.6). The react binding must keep the router-integration seam thin enough that a next binding is later work, not redesign. `packages/mcp` remains Stage 3.
+
+### D9 — The extraction proof is the example migration [normative for Stage 2]
+`examples/design-studio` migrates from its inline proto-runtime to `packages/core` + `packages/react`, deleting the inline runtime. The Stage-2 gate: behavior identical — all 47 eval fixtures green through the canonical runner, the external-adapter path intact, the demo script unchanged. If migration forces API contortions, the packages are wrong, not the example.
+
+### D10 — Ecosystem compile-down [normative for Stage 2]
+Per §10/§12: policy compiles down to ecosystem primitives — a small adapter surface demonstrating Steerable policy resolution driving Vercel AI SDK `toolApproval`-style predicates and `canUseTool`-style callbacks. Mock-provider unit tests only (zero API calls); the claim proven is "adoption costs nothing for teams already inside those stacks."
+
+### D11 — Tooling minimalism [repo]
+npm workspaces; TypeScript project builds; vitest. **No npm publishing**, no changesets, no hosted anything — publishing is an owner decision after the Stage-2 gate. CI extends the existing workflow (build + tests + evals across workspaces).
+
+### D12 — Stage-1 residue precedes extraction [repo]
+Issues #41 (four spec-doc clarifications + unblocking the four pending SA-CONF items) and #55 (eval papercuts + a first-class facts/read-tools fixture kind) land before or alongside the first extraction PR — spec hygiene before code builds on it.
+
+### Sprints
+**Sprint 6 — Residue + core extraction start:** #41 fixes · #55 fixes · workspaces scaffolding + core registry/policy extraction.
+**Sprint 7 — SDK completion:** core execution/ledger/undo · react bindings · design-studio migration (the D9 proof) · ecosystem adapters (D10) · Stage-2 gate review + front-door updates.
