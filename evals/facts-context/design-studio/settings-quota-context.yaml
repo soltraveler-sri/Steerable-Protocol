@@ -1,0 +1,62 @@
+fixtureFormatVersion: "0.1.0"
+kind: facts-context
+id: design-studio.context.settings-quota-facts-and-read-tool
+title: Settings surface publishes quota facts and returns quota status
+description: Pins the Settings facts declaration beside the typed quota query that backs the corresponding answer route.
+authoredBy: issue-60-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio facts-context fixture.
+requirementRefs:
+  - SA-DECL-107
+  - SA-CTX-020
+  - SA-CTX-028
+  - SA-CTX-040
+  - SA-CTX-042
+given:
+  surfaceId: settings
+  readToolCalls:
+    - id: quota.get_status
+      params: {}
+expected:
+  facts:
+    - id: settings.current_facts
+      values:
+        allowExtra: true
+        fields:
+          ui.route:
+            kind: exact
+            value: "/settings"
+          quota.exports_remaining:
+            kind: exact
+            value: 3
+          quota.limit:
+            kind: exact
+            value: 3
+  readTools:
+    - id: quota.get_status
+      result:
+        allowExtra: false
+        fields:
+          limit:
+            kind: exact
+            value: 3
+          remaining:
+            kind: exact
+            value: 3
+          lastExportedAt:
+            kind: exact
+            value: null
+          message:
+            kind: exact
+            value: "Three mock exports are available for this session."
+          canExport:
+            kind: exact
+            value: true

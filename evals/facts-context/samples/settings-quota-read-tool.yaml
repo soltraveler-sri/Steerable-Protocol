@@ -1,0 +1,42 @@
+fixtureFormatVersion: "0.1.0"
+kind: facts-context
+id: sample.context.settings-quota-read-tool
+title: Settings quota facts agree with typed quota status
+description: Sample fixture for an empty-parameter read tool alongside the facts that summarize the same quota.
+authoredBy: issue-60-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses Design Studio-oriented IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-CTX-028
+  - SA-CTX-040
+  - SA-CTX-043
+given:
+  surfaceId: settings
+  readToolCalls:
+    - id: quota.get_status
+      params: {}
+expected:
+  facts:
+    - id: settings.current_facts
+      values:
+        allowExtra: true
+        fields:
+          quota.exports_remaining:
+            kind: exact
+            value: 3
+  readTools:
+    - id: quota.get_status
+      result:
+        allowExtra: true
+        fields:
+          remaining:
+            kind: exact
+            value: 3

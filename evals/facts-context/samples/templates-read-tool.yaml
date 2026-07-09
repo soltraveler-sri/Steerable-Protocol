@@ -1,0 +1,43 @@
+fixtureFormatVersion: "0.1.0"
+kind: facts-context
+id: sample.context.templates-read-tool
+title: Templates facts and typed lookup share a live surface
+description: Sample fixture for a bounded facts assertion followed by a parameterized read-tool lookup.
+authoredBy: issue-60-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses Design Studio-oriented IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-CTX-028
+  - SA-CTX-040
+  - SA-CTX-042
+given:
+  surfaceId: templates
+  readToolCalls:
+    - id: template.list_available
+      params:
+        tone: premium
+expected:
+  facts:
+    - id: templates.current_facts
+      values:
+        allowExtra: true
+        fields:
+          ui.route:
+            kind: exact
+            value: "/templates"
+  readTools:
+    - id: template.list_available
+      result:
+        allowExtra: true
+        fields:
+          activeTemplateId:
+            kind: exact
+            value: botanical-waitlist

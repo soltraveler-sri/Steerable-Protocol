@@ -126,6 +126,16 @@ async function executeFixture(adapter, fixture) {
     return adapter.execute(fixture);
   }
 
+  if (fixture.kind === "facts-context") {
+    if (typeof adapter.context !== "function") {
+      throw new Error(
+        "Adapter does not implement context(fixture), required by facts-context fixtures.",
+      );
+    }
+
+    return adapter.context(fixture);
+  }
+
   throw new Error(`Unsupported fixture kind ${fixture.kind}`);
 }
 
@@ -333,6 +343,8 @@ function assertFixture(fixture, actual) {
     assertReversibilityFixture(fixture.expected, actual);
   } else if (fixture.kind === "cross-surface") {
     assertCrossSurfaceFixture(fixture.expected, actual);
+  } else if (fixture.kind === "facts-context") {
+    assertFactsContextFixture(fixture.expected, actual);
   }
 }
 
@@ -483,6 +495,38 @@ function assertCrossSurfaceFixture(expected, actual) {
       actual.notExecutedStepIds ?? [],
     );
   }
+}
+
+function assertFactsContextFixture(expected, actual) {
+  assertEqual("expected.facts.length", expected.facts.length, actual.facts?.length ?? 0);
+
+  expected.facts.forEach((expectedFacts) => {
+    const actualFacts = actual.facts.find((facts) => facts.id === expectedFacts.id);
+
+    if (!actualFacts) {
+      throw new Error(`Missing facts declaration ${expectedFacts.id}`);
+    }
+
+    assertParams(`facts.${expectedFacts.id}.values`, expectedFacts.values, actualFacts.values ?? {});
+  });
+
+  const expectedReadTools = expected.readTools ?? [];
+  const actualReadTools = actual.readTools ?? [];
+  assertEqual("expected.readTools.length", expectedReadTools.length, actualReadTools.length);
+
+  expectedReadTools.forEach((expectedReadTool) => {
+    const actualReadTool = actualReadTools.find((readTool) => readTool.id === expectedReadTool.id);
+
+    if (!actualReadTool) {
+      throw new Error(`Missing read-tool result ${expectedReadTool.id}`);
+    }
+
+    assertParams(
+      `readTools.${expectedReadTool.id}.result`,
+      expectedReadTool.result,
+      actualReadTool.result ?? {},
+    );
+  });
 }
 
 function assertDisclosure(label, expected, actual) {
