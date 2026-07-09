@@ -1,0 +1,18 @@
+{
+  "name": "steerable-protocol",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "packages/*",
+    "examples/*",
+    "evals"
+  ],
+  "scripts": {
+    "build": "tsc -b && npm --workspace design-studio run build",
+    "test": "npm --prefix examples/design-studio ci && npm run test --workspaces --if-present && npm --prefix examples/design-studio run evals"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10"
+  }
+}
