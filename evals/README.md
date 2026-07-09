@@ -57,6 +57,37 @@ The runner binds to a target integration through a small adapter object:
 
 Design Studio's adapter lives at `examples/design-studio/src/steerable/evalAdapter.ts`. A new integration should implement the same five fields without changing `evals/run-fixtures.mjs`.
 
+## Running an External Target
+
+External integrations can keep their adapter and fixtures in their own repository. Point the canonical runner at an absolute adapter module path and the fixture suite directory:
+
+```bash
+node /path/to/Steerable-Protocol/evals/run-fixtures.mjs \
+  --adapter=/absolute/path/to/acme-eval-adapter.mjs \
+  --fixtures=/absolute/path/to/acme-fixtures
+```
+
+`STEERABLE_EVAL_ADAPTER=/absolute/path/to/acme-eval-adapter.mjs` can be used instead of `--adapter`. The fixtures directory should use the same kind-based layout as this repository, such as `intent-routing/acme/*.yaml` and `policy-decisions/acme/*.yaml`. The runner still validates every fixture's `target.integrationId`, `target.registry.id`, `target.registry.version`, and `target.registry.ref` against the external adapter's declared `target`.
+
+Minimal external adapter module:
+
+```js
+export default {
+  target: {
+    integrationId: "acme",
+    registry: {
+      id: "acme.registry",
+      version: "2026-07-09",
+      ref: "npm:@acme/registry@2026-07-09",
+    },
+  },
+  async route(fixture) {},
+  async resolve(fixture) {},
+  async execute(fixture) {},
+  async undo(fixture) {},
+};
+```
+
 ## Failing Fixture Policy
 
 Unquarantined red fixtures fail the runner. If a fixture exposes a real product bug that cannot be fixed in the same task, keep the fixture in the suite and add an entry to `evals/quarantined-fixtures.json` with the fixture `id`, linked issue URL, owner, date, and reason. The runner reports quarantined failures separately and does not count them as ambient green. If a quarantined fixture starts passing, the runner fails with a stale-quarantine error so the entry is removed.

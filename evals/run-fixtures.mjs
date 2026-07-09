@@ -13,13 +13,13 @@ import {
 
 const evalsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(evalsDir, "..");
-const targetArg = process.argv.find((arg) => arg.startsWith("--target="));
-const targetName = targetArg ? targetArg.slice("--target=".length) : "design-studio";
+const options = parseOptions(process.argv.slice(2));
+const fixtureRoot = options.fixturesDir;
 const ajv = createValidator(evalsDir);
 
 const quarantines = loadQuarantines();
-const adapter = await loadAdapter(targetName);
-const fixtureFiles = findFixtureFiles(evalsDir, { includeSamples: false });
+const adapter = await loadAdapter(options);
+const fixtureFiles = findFixtureFiles(fixtureRoot, { includeSamples: false });
 const summaries = new Map(
   suiteKinds.map((kind) => [
     kind,
@@ -29,7 +29,7 @@ const summaries = new Map(
 let failures = 0;
 
 for (const file of fixtureFiles) {
-  const rel = path.relative(evalsDir, file);
+  const rel = path.relative(fixtureRoot, file);
   let fixture;
 
   try {
@@ -130,8 +130,12 @@ async function executeFixture(adapter, fixture) {
 }
 
 async function loadAdapter(target) {
-  if (target !== "design-studio") {
-    throw new Error(`Unsupported target "${target}". Only "design-studio" is wired.`);
+  if (target.adapterPath) {
+    return loadExternalAdapter(target.adapterPath);
+  }
+
+  if (target.targetName !== "design-studio") {
+    throw new Error(`Unsupported target "${target.targetName}". Only "design-studio" is wired.`);
   }
 
   const vitePath = path.join(
@@ -181,12 +185,123 @@ async function loadAdapter(target) {
     }
 
     const module = await import(pathToFileURL(outfile));
-    const createAdapter = module.default ?? module.createDesignStudioEvalAdapter;
+    const exported = module.default ?? module.createDesignStudioEvalAdapter;
+    const adapter = typeof exported === "function" ? await exported() : exported;
 
-    return createAdapter();
+    return validateAdapterContract(adapter, "Design Studio adapter");
   } finally {
     fs.rmSync(outdir, { recursive: true, force: true });
   }
+}
+
+async function loadExternalAdapter(rawAdapterPath) {
+  if (!path.isAbsolute(rawAdapterPath)) {
+    throw new Error(
+      "External adapter path must be absolute. Use --adapter=/absolute/path/to/adapter.mjs or STEERABLE_EVAL_ADAPTER=/absolute/path/to/adapter.mjs.",
+    );
+  }
+
+  if (!fs.existsSync(rawAdapterPath)) {
+    throw new Error(`External adapter not found: ${rawAdapterPath}`);
+  }
+
+  const module = await import(pathToFileURL(rawAdapterPath));
+  const exported = module.default ?? module.adapter ?? module.evalAdapter;
+  const adapter = typeof exported === "function" ? await exported() : exported;
+
+  return validateAdapterContract(adapter, `External adapter ${rawAdapterPath}`);
+}
+
+function validateAdapterContract(adapter, label) {
+  const issues = [];
+
+  if (!isObject(adapter)) {
+    issues.push("target", "route", "resolve", "execute", "undo");
+  } else {
+    if (!isObject(adapter.target)) {
+      issues.push("target");
+    }
+
+    if (!isNonEmptyString(adapter.target?.integrationId)) {
+      issues.push("target.integrationId");
+    }
+
+    if (!isObject(adapter.target?.registry)) {
+      issues.push("target.registry");
+    }
+
+    if (!isNonEmptyString(adapter.target?.registry?.id)) {
+      issues.push("target.registry.id");
+    }
+
+    if (!isNonEmptyString(adapter.target?.registry?.version)) {
+      issues.push("target.registry.version");
+    }
+
+    if (!isNonEmptyString(adapter.target?.registry?.ref)) {
+      issues.push("target.registry.ref");
+    }
+
+    for (const method of ["route", "resolve", "execute", "undo"]) {
+      if (typeof adapter[method] !== "function") {
+        issues.push(method);
+      }
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new Error(
+      `${label} does not implement the target adapter contract. Missing or invalid field(s): ${issues.join(", ")}.`,
+    );
+  }
+
+  return adapter;
+}
+
+function parseOptions(argv) {
+  const options = {
+    targetName: "design-studio",
+    adapterPath: process.env.STEERABLE_EVAL_ADAPTER,
+    fixturesDir: evalsDir,
+  };
+
+  for (const arg of argv) {
+    if (arg.startsWith("--target=")) {
+      options.targetName = arg.slice("--target=".length);
+    } else if (arg.startsWith("--adapter=")) {
+      options.adapterPath = arg.slice("--adapter=".length);
+    } else if (arg.startsWith("--fixtures=")) {
+      const fixturesDir = arg.slice("--fixtures=".length);
+
+      if (!fixturesDir) {
+        throw new Error("--fixtures requires a directory path.");
+      }
+
+      options.fixturesDir = path.resolve(fixturesDir);
+    } else {
+      throw new Error(
+        `Unknown option ${arg}. Supported options: --target=design-studio, --adapter=/absolute/path/to/adapter.mjs, --fixtures=/path/to/fixtures.`,
+      );
+    }
+  }
+
+  if (options.adapterPath === "") {
+    throw new Error("--adapter requires an absolute path.");
+  }
+
+  if (!fs.existsSync(options.fixturesDir) || !fs.statSync(options.fixturesDir).isDirectory()) {
+    throw new Error(`Fixtures directory not found: ${options.fixturesDir}`);
+  }
+
+  return options;
+}
+
+function isObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length > 0;
 }
 
 function loadQuarantines() {
