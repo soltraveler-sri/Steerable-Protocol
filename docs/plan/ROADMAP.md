@@ -178,3 +178,6 @@ Issues #41 (four spec-doc clarifications + unblocking the four pending SA-CONF i
 ### Sprints
 **Sprint 6 — Residue + core extraction start:** #41 fixes · #55 fixes · workspaces scaffolding + core registry/policy extraction.
 **Sprint 7 — SDK completion:** core execution/ledger/undo · react bindings · design-studio migration (the D9 proof) · ecosystem adapters (D10) · Stage-2 gate review + front-door updates.
+
+**Status (2026-07-09):** Sprint 6 done — PRs #67-#69.
+**Status (2026-07-09):** Sprint 7 done — PRs #70-#73; #66 gate review closes the sprint.

@@ -21,7 +21,19 @@ These define the project's character; every document in this repo is bound by th
 
 ## Project status — honest version
 
-**Design/spec phase.** There are no installable packages yet, and none are planned until the spec has proven itself (see the staged plan in the north-star). What exists or is in flight: the normative spec documents, an agent-readable integration kit (guides, skills, conformance checklist), a small in-repo example app that every spec concept is exercised against, and eval fixtures. Work is organized as sprint milestones of PR-scoped issues in this repo's tracker.
+**Stage 2 is complete.** Steerable now has the normative specification, an agent-readable integration kit (guides, skills, and conformance checklist), working but unpublished `@steerable/core` and `@steerable/react` workspace packages, a package-backed Design Studio reference experience, and deterministic eval fixtures. The packages are private workspace artifacts, not installable npm releases; npm publishing remains an owner decision after this gate, not an implied next step.
+
+## Run the reference experience
+
+From the repository root:
+
+```bash
+npm ci
+npx tsc -b
+npm --prefix examples/design-studio run dev
+```
+
+The explicit TypeScript build is required before the example dev server resolves the workspace packages. For the full local battery, run `npm run build` and `npm run test`; validation is deterministic and makes no model-provider calls.
 
 ## Orientation
 
@@ -29,7 +41,7 @@ These define the project's character; every document in this repo is bound by th
 |---|---|
 | [`Steerable-Protocol-NorthStar.md`](./Steerable-Protocol-NorthStar.md) | The canonical design document. Everything traces back to it. |
 | [`docs/agent-responsive-design.md`](./docs/agent-responsive-design.md) | The category essay: why apps need to adapt to agents as a new class of users. |
-| [`docs/plan/ROADMAP.md`](./docs/plan/ROADMAP.md) | The Stage-1 plan: structural decisions, epics, sprints, gates. |
+| [`docs/plan/ROADMAP.md`](./docs/plan/ROADMAP.md) | The staged plan: structural decisions, epics, sprints, and gates. |
 | [`docs/plan/GROUNDING.md`](./docs/plan/GROUNDING.md) | The condensed mission, principles, and risks. |
 | [Issues](../../issues) / [Milestones](../../milestones) | PR-scoped work items, bundled into sprint milestones, labeled by epic (`epic:spec`, `epic:example`, `epic:kit`, `epic:evals`, `epic:meta`). |
 
