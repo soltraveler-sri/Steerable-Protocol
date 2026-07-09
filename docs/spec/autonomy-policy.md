@@ -189,6 +189,7 @@ Table 3: `sensitive-domain` default mapping.
 - **SA-POL-170:** Under `sensitive-domain`, `effects.external: true` MUST impose a minimum mode of `Plan preview`.
 - **SA-POL-171:** A developer override MAY define stricter effect floors than the framework preset defaults.
 - **SA-POL-172:** A developer override MAY define less restrictive effect floors only when the resulting policy remains consistent with declaration validation, `confirmation: always`, user autonomy lowering, sticky-grant prohibitions, and conformance requirements.
+- **SA-POL-173:** Each effect-floor rationale record MUST include its dimension, observed value, candidate floor mode when one exists, `applied`, and a reason code. `applied` MUST be `true` exactly when a candidate floor mode exists and is at least as restrictive as the resolved mode immediately before that record's floor is evaluated; it MUST be `false` when no candidate floor exists or a stricter mode was already selected. A true value means the floor participated in the decision even when it equals the incoming mode and causes no mode change. This resolves issue #41's effect-floor rationale ambiguity.
 
 ## 12. Worked Example (Informative)
 
@@ -262,3 +263,7 @@ This document was checked against the founding decision after drafting:
 | **SA-POL-188** | That scoped grants are explicit policy inputs and never apply to destructive actions. | Which non-destructive scopes, expirations, and revocation controls the product offers. |
 | **SA-POL-189** | That runtime-signal demotion is explicit, bounded by default, and auditable. | Which runtime signals exist and what thresholds or verifier outputs feed policy. |
 | **SA-POL-190** | That every policy decision must be recordable for the ledger. | Ledger storage depth, retention, redaction, and audit strictness beyond later conformance minimums. |
+
+## 14. Resolution Note (Informative)
+
+Issue #41 resolves `effectFloor.applied` as a participation flag, not merely a mode-change flag: a candidate floor is applied when it is at least as restrictive as the mode present when the engine evaluates it. This preserves equal-floor evidence in the recorded rationale and makes no-floor and already-stricter cases deterministically false. The Design Studio proto-runtime uses that rule, so no example code change is required.
