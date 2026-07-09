@@ -1,0 +1,2015 @@
+diff --git a/.gitignore b/.gitignore
+index e67ff99..98a0679 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,7 +1,19 @@
+ node_modules/
++.next/
+ dist/
++build/
++target/
++.venv/
++__pycache__/
+ .vercel/
+ *.local
++*.log
++*.whl
++*.gguf
++*.bin
++*.safetensors
++*.dylib
++*.node
+ playwright-*.png
+ .DS_Store
+ .superpowers/
+diff --git a/package.json b/package.json
+index ffb678f..00e7418 100644
+--- a/package.json
++++ b/package.json
+@@ -7,6 +7,7 @@
+     "dev": "vite --host 127.0.0.1",
+     "build": "tsc && vite build",
+     "preview": "vite preview --host 127.0.0.1",
++    "steerable:probe": "node scripts/steerable-probe.mjs",
+     "typecheck": "tsc --noEmit",
+     "lint": "eslint .",
+     "format": "prettier --write ."
+diff --git a/scripts/steerable-probe.mjs b/scripts/steerable-probe.mjs
+new file mode 100644
+index 0000000..1a5c5cb
+--- /dev/null
++++ b/scripts/steerable-probe.mjs
+@@ -0,0 +1,109 @@
++import { readFileSync } from 'node:fs'
++import { join } from 'node:path'
++
++const root = process.cwd()
++const capabilities = read('src/steerable/capabilities.ts')
++const policy = read('src/steerable/policy.ts')
++const fixtures = read('src/steerable/fixtures.ts')
++const runtime = read('src/steerable/runtime.tsx')
++
++const failures = []
++
++for (const id of [
++  'settings.current_facts',
++  'settings.get_local_status',
++  'backup.get_status',
++  'library.get_export_summary',
++  'settings.set_theme',
++  'settings.set_daily_review',
++  'backup.download_json'
++]) {
++  includes(capabilities, id, `missing declaration ${id}`)
++}
++
++for (const fixtureId of [
++  'QS-STEER-FACTS-001',
++  'QS-STEER-READ-001',
++  'QS-STEER-READ-002',
++  'QS-STEER-ACTION-001',
++  'QS-STEER-ACTION-002',
++  'QS-STEER-GATED-001',
++  'QS-STEER-UNDO-001',
++  'QS-STEER-UNDO-002'
++]) {
++  includes(fixtures, fixtureId, `missing fixture ${fixtureId}`)
++}
++
++for (const cell of [
++  'settings/facts/counts-status-no-raw-content',
++  'settings/read/local-status-no-raw-content',
++  'settings/action/theme-safe-undoable-ungated',
++  'settings/action/backup-sensitive-external-step-gated',
++  'settings/undo/theme-restores-previous-preference',
++  'settings/undo/backup-honest-irrevocable-refusal'
++]) {
++  includes(fixtures, cell, `missing coverage cell ${cell}`)
++}
++
++includes(capabilities, "rawContentIncluded: false", 'facts/read tools must explicitly exclude raw content')
++includes(capabilities, "facts: ['route', 'library', 'backup', 'security', 'preferences', 'storage', 'policy']", 'facts declaration must list finite top-level keys')
++includes(capabilities, "externalExposure: 'none'", 'capability declarations must materialize externalExposure defaults')
++includes(capabilities, "risk: 'safe'", 'safe action risk declarations missing')
++includes(capabilities, "risk: 'side_effect'", 'backup side-effect risk declaration missing')
++includes(capabilities, "reversibility: 'irreversible'", 'backup irreversible declaration missing')
++includes(capabilities, 'effects: { external: true, cost: \'none\', sensitive: true }', 'backup sensitive external effect declaration missing')
++includes(policy, "'settings.set_theme': 'Optimistic chain'", 'theme policy contrast missing')
++includes(policy, "'settings.set_daily_review': 'Optimistic chain'", 'daily review policy contrast missing')
++includes(policy, "'backup.download_json': 'Step-gated'", 'backup policy contrast missing')
++includes(policy, 'safe_reversible_preference', 'safe reversible policy reason code missing')
++includes(policy, 'sensitive_external_irreversible', 'sensitive backup policy reason code missing')
++includes(runtime, "kind: 'policy'", 'runtime must append a separate policy record')
++includes(runtime, "kind: 'approval'", 'runtime must append a separate approval record')
++includes(runtime, "decision.requiresApproval ? 'pending_approval' : 'running'", 'runtime must hold gated actions before execution')
++includes(runtime, 'action.captureUndo?.', 'runtime must capture undo before execution')
++includes(runtime, 'action.undo(runtimeContext', 'runtime must execute declared undo handlers')
++
++const fixtureIds = matches(fixtures, /id: '(QS-STEER-[^']+)'/g)
++const duplicateFixtureIds = duplicates(fixtureIds)
++if (duplicateFixtureIds.length) failures.push(`duplicate fixture ids: ${duplicateFixtureIds.join(', ')}`)
++
++if (failures.length) {
++  console.error('Steerable probe failed:')
++  for (const failure of failures) console.error(`- ${failure}`)
++  process.exit(1)
++}
++
++console.log(
++  JSON.stringify(
++    {
++      ok: true,
++      checkedFiles: ['src/steerable/capabilities.ts', 'src/steerable/policy.ts', 'src/steerable/fixtures.ts', 'src/steerable/runtime.tsx'],
++      fixtures: fixtureIds.length,
++      message: 'Steerable static fixture probe passed.'
++    },
++    null,
++    2
++  )
++)
++
++function read(path) {
++  return readFileSync(join(root, path), 'utf8')
++}
++
++function includes(source, needle, message) {
++  if (!source.includes(needle)) failures.push(message)
++}
++
++function matches(source, regex) {
++  return [...source.matchAll(regex)].map((match) => match[1])
++}
++
++function duplicates(values) {
++  const seen = new Set()
++  const dupes = new Set()
++  for (const value of values) {
++    if (seen.has(value)) dupes.add(value)
++    seen.add(value)
++  }
++  return [...dupes]
++}
+diff --git a/src/components/AppShell.tsx b/src/components/AppShell.tsx
+index ba02f54..58d69d2 100644
+--- a/src/components/AppShell.tsx
++++ b/src/components/AppShell.tsx
+@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+ import { useI18n } from '../i18n/I18nProvider'
+ import { captureEventName, isCaptureMode, type CaptureMode } from '../services/captureEvents'
+ import { tapHaptic } from '../services/haptics'
++import { SteerableProvider } from '../steerable/runtime'
+ import { CommandDrawer } from './CommandDrawer'
+ import { InstallPrompt } from './InstallPrompt'
+ import { Onboarding } from './Onboarding'
+@@ -150,9 +151,11 @@ export function AppShell() {
+         onPointerDown={handlePointerDown}
+         onPointerUp={handlePointerUp}
+       >
+-        <Suspense fallback={<PageLoader />}>
+-          <Outlet />
+-        </Suspense>
++        <SteerableProvider>
++          <Suspense fallback={<PageLoader />}>
++            <Outlet />
++          </Suspense>
++        </SteerableProvider>
+       </main>
+       <CommandDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
+       <ZeroCaptureSheet open={captureOpen} onClose={() => setCaptureOpen(false)} initialMode={captureMode} />
+diff --git a/src/pages/SettingsPage.tsx b/src/pages/SettingsPage.tsx
+index ba4d003..beec9c8 100644
+--- a/src/pages/SettingsPage.tsx
++++ b/src/pages/SettingsPage.tsx
+@@ -32,6 +32,7 @@ import {
+ import { useBookStore } from '../store/useBookStore'
+ import { useQuoteStore } from '../store/useQuoteStore'
+ import { useSettingsStore, type AppTheme, type DailyMode } from '../store/useSettingsStore'
++import { SteerableSettingsPanel } from '../steerable/SteerableSettingsPanel'
+ import { quoteStatus } from '../types/quote'
+ 
+ export function SettingsPage() {
+@@ -234,6 +235,8 @@ export function SettingsPage() {
+         protectionStatus={protectionStatus}
+       />
+ 
++      <SteerableSettingsPanel />
++
+       <section className="grid gap-0 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
+         <Panel title={t('language')} defaultOpen>
+           <p className="text-sm leading-6 text-graphite">{t('languageHelp')}</p>
+diff --git a/src/steerable/SteerableSettingsPanel.tsx b/src/steerable/SteerableSettingsPanel.tsx
+new file mode 100644
+index 0000000..c37d0ff
+--- /dev/null
++++ b/src/steerable/SteerableSettingsPanel.tsx
+@@ -0,0 +1,226 @@
++import { Activity, CheckCircle2, DatabaseBackup, FileSearch, Play, RotateCcw, Settings2, ShieldCheck, Undo2, XCircle } from 'lucide-react'
++import { useMemo } from 'react'
++import { useSteerableRuntime, type LedgerRecord } from './runtimeState'
++import type { JsonObject, JsonValue } from './schema'
++
++export function SteerableSettingsPanel() {
++  const {
++    facts,
++    records,
++    publishFacts,
++    invokeReadTool,
++    invokeAction,
++    approveRecord,
++    declineRecord,
++    undoRecord,
++    runProbe
++  } = useSteerableRuntime()
++
++  const currentTheme = factText(facts, ['preferences', 'theme'])
++  const nextTheme = currentTheme === 'dark' ? 'light' : 'dark'
++  const visibleRecords = useMemo(() => records.slice(0, 6), [records])
++
++  return (
++    <section className="classical-panel overflow-hidden rounded-md">
++      <div className="grid gap-5 px-4 py-5 sm:px-5 lg:grid-cols-[1fr_1.25fr]">
++        <div className="min-w-0">
++          <div className="flex items-start gap-3">
++            <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-line bg-paper text-clay">
++              <ShieldCheck size={18} />
++            </span>
++            <div className="min-w-0">
++              <p className="text-xs uppercase tracking-[0.18em] text-graphite">Steerable pilot</p>
++              <h2 className="mt-1 font-serif text-2xl leading-tight">Settings control surface</h2>
++              <p className="mt-2 text-sm leading-6 text-graphite">
++                Bounded facts and read tools stay content-free. Preference actions run with undo; backup export waits for approval.
++              </p>
++            </div>
++          </div>
++
++          <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
++            <FactPill label="Entries" value={factText(facts, ['library', 'totalEntries'])} />
++            <FactPill label="Backup" value={factText(facts, ['backup', 'state'])} />
++            <FactPill label="Posture" value={factText(facts, ['policy', 'posture'])} />
++          </div>
++
++          <div className="mt-4 grid gap-2 sm:grid-cols-2">
++            <ToolButton icon={<FileSearch size={15} />} label="Publish facts" onClick={publishFacts} />
++            <ToolButton icon={<Activity size={15} />} label="Run fixture probe" onClick={runProbe} />
++            <ToolButton icon={<FileSearch size={15} />} label="Read local status" onClick={() => void invokeReadTool('settings.get_local_status')} />
++            <ToolButton icon={<FileSearch size={15} />} label="Read backup status" onClick={() => void invokeReadTool('backup.get_status')} />
++            <ToolButton icon={<FileSearch size={15} />} label="Read export scope" onClick={() => void invokeReadTool('library.get_export_summary')} />
++          </div>
++
++          <div className="mt-4 grid gap-2 sm:grid-cols-2">
++            <ToolButton
++              icon={<Settings2 size={15} />}
++              label={`Set ${nextTheme} theme`}
++              onClick={() => void invokeAction('settings.set_theme', { theme: nextTheme })}
++            />
++            <ToolButton
++              icon={<RotateCcw size={15} />}
++              label="Use 5 balanced reviews"
++              onClick={() => void invokeAction('settings.set_daily_review', { dailyCount: 5, dailyMode: 'balanced' })}
++            />
++            <ToolButton
++              icon={<DatabaseBackup size={15} />}
++              label="Request JSON backup"
++              tone="primary"
++              onClick={() => void invokeAction('backup.download_json')}
++            />
++          </div>
++        </div>
++
++        <div className="min-w-0 border-t border-line pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
++          <div className="flex items-center justify-between gap-3">
++            <div>
++              <p className="text-xs uppercase tracking-[0.18em] text-graphite">Activity ledger</p>
++              <p className="mt-1 text-sm text-graphite">Session-only, newest first.</p>
++            </div>
++            <span className="rounded border border-line px-2 py-1 text-[11px] uppercase tracking-[0.14em] text-graphite">
++              {records.length}
++            </span>
++          </div>
++
++          <ol className="mt-3 grid gap-3">
++            {visibleRecords.length ? (
++              visibleRecords.map((record) => (
++                <LedgerItem
++                  key={record.id}
++                  record={record}
++                  onApprove={() => void approveRecord(record.id)}
++                  onDecline={() => declineRecord(record.id)}
++                  onUndo={() => void undoRecord(record.id)}
++                />
++              ))
++            ) : (
++              <li className="rounded-md border border-line bg-paper/60 px-3 py-4 text-sm text-graphite">
++                No steering activity in this session yet.
++              </li>
++            )}
++          </ol>
++        </div>
++      </div>
++    </section>
++  )
++}
++
++function FactPill({ label, value }: { label: string; value: string }) {
++  return (
++    <div className="min-w-0 border-t border-line pt-2">
++      <p className="text-[0.66rem] uppercase tracking-[0.15em] text-graphite">{label}</p>
++      <p className="mt-1 truncate text-sm text-ink">{value || 'n/a'}</p>
++    </div>
++  )
++}
++
++function ToolButton({
++  icon,
++  label,
++  tone = 'secondary',
++  onClick
++}: {
++  icon: React.ReactNode
++  label: string
++  tone?: 'primary' | 'secondary'
++  onClick: () => void
++}) {
++  return (
++    <button
++      type="button"
++      className={[
++        'inline-flex min-h-[44px] items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm transition',
++        tone === 'primary'
++          ? 'border border-ink bg-ink text-paper hover:bg-[#171615]'
++          : 'border border-line bg-paper/70 text-graphite hover:border-ink/45 hover:text-ink'
++      ].join(' ')}
++      onClick={onClick}
++    >
++      <span className="flex min-w-0 items-center gap-2">
++        <span className="shrink-0">{icon}</span>
++        <span className="truncate">{label}</span>
++      </span>
++      <Play size={13} className="shrink-0 opacity-70" />
++    </button>
++  )
++}
++
++function LedgerItem({
++  record,
++  onApprove,
++  onDecline,
++  onUndo
++}: {
++  record: LedgerRecord
++  onApprove: () => void
++  onDecline: () => void
++  onUndo: () => void
++}) {
++  return (
++    <li className="rounded-md border border-line bg-paper/60 p-3">
++      <div className="flex items-start justify-between gap-3">
++        <div className="min-w-0">
++          <p className="truncate text-sm font-medium text-ink">{record.title}</p>
++          <p className="mt-1 text-xs text-graphite">
++            {record.mode} · {record.status.replace('_', ' ')}
++          </p>
++        </div>
++        <span className={statusClass(record.status)}>
++          {record.status === 'succeeded' || record.status === 'undone' ? <CheckCircle2 size={14} /> : <XCircle size={14} />}
++        </span>
++      </div>
++
++      <p className="mt-2 text-sm leading-6 text-graphite">{record.result?.summary ?? record.error ?? record.policyReasons[0]}</p>
++
++      {record.status === 'pending_approval' && (
++        <div className="mt-3 grid gap-2 sm:flex">
++          <button className="rounded-md bg-ink px-3 py-2 text-sm text-paper" type="button" onClick={onApprove}>
++            Approve
++          </button>
++          <button className="rounded-md border border-line px-3 py-2 text-sm text-graphite" type="button" onClick={onDecline}>
++            Decline
++          </button>
++        </div>
++      )}
++
++      {record.undo?.available && record.status === 'succeeded' && (
++        <button
++          className="mt-3 inline-flex items-center gap-2 rounded-md border border-line px-3 py-2 text-sm text-graphite"
++          type="button"
++          onClick={onUndo}
++        >
++          <Undo2 size={14} />
++          Undo
++        </button>
++      )}
++
++      {record.undo && !record.undo.available && record.status !== 'pending_approval' && (
++        <p className="mt-2 text-xs leading-5 text-graphite">{record.undo.reason}</p>
++      )}
++    </li>
++  )
++}
++
++function statusClass(status: LedgerRecord['status']) {
++  const tone =
++    status === 'succeeded' || status === 'undone'
++      ? 'border-moss text-moss'
++      : status === 'failed' || status === 'declined'
++        ? 'border-clay text-clay'
++        : 'border-line text-graphite'
++
++  return `mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border ${tone}`
++}
++
++function factText(facts: JsonObject | null, path: readonly string[]) {
++  let value: JsonValue | undefined = facts ?? undefined
++  for (const key of path) {
++    if (!isPlainJsonObject(value)) return ''
++    value = value[key]
++  }
++  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : ''
++}
++
++function isPlainJsonObject(value: JsonValue | undefined): value is JsonObject {
++  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
++}
+diff --git a/src/steerable/capabilities.ts b/src/steerable/capabilities.ts
+new file mode 100644
+index 0000000..650a420
+--- /dev/null
++++ b/src/steerable/capabilities.ts
+@@ -0,0 +1,429 @@
++import { backupState as classifyBackupState } from '../services/backup'
++import { quoteStatus } from '../types/quote'
++import type {
++  ActionDeclaration,
++  FactsDeclaration,
++  JsonObject,
++  ParamSchema,
++  ReadToolDeclaration,
++  RuntimeContext,
++  SteerableRegistry,
++  SurfaceDeclaration
++} from './schema'
++
++const allowedDailyCounts = [3, 5, 10, 15]
++
++export const quietSignalSteerableTarget = {
++  integrationId: 'quiet-signal.settings',
++  registryId: 'quiet-signal.steerable',
++  registryVersion: '0.1.0',
++  registryRef: 'src/steerable/capabilities.ts'
++} as const
++
++const emptyParams: ParamSchema = {
++  description: 'No parameters.',
++  example: {},
++  parse(input) {
++    if (input === undefined || input === null) return { ok: true, value: {} }
++    const object = parsePlainObject(input)
++    if (!object.ok) return object
++    const keys = Object.keys(object.value)
++    return keys.length === 0 ? object : { ok: false, error: `Unexpected parameter: ${keys[0]}` }
++  }
++}
++
++const themeParams: ParamSchema = {
++  description: 'Theme preference to apply.',
++  example: { theme: 'dark' },
++  parse(input) {
++    const object = parsePlainObject(input)
++    if (!object.ok) return object
++    const unknown = unknownKey(object.value, ['theme'])
++    if (unknown) return { ok: false, error: `Unexpected parameter: ${unknown}` }
++    return object.value.theme === 'light' || object.value.theme === 'dark'
++      ? { ok: true, value: { theme: object.value.theme } }
++      : { ok: false, error: 'theme must be light or dark' }
++  }
++}
++
++const dailyReviewParams: ParamSchema = {
++  description: 'Daily review count and selection mode.',
++  example: { dailyCount: 5, dailyMode: 'balanced' },
++  parse(input) {
++    const object = parsePlainObject(input)
++    if (!object.ok) return object
++    const unknown = unknownKey(object.value, ['dailyCount', 'dailyMode'])
++    if (unknown) return { ok: false, error: `Unexpected parameter: ${unknown}` }
++    const { dailyCount, dailyMode } = object.value
++    if (typeof dailyCount !== 'number' || !allowedDailyCounts.includes(dailyCount)) {
++      return { ok: false, error: 'dailyCount must be 3, 5, 10, or 15' }
++    }
++    if (dailyMode !== 'balanced' && dailyMode !== 'random') {
++      return { ok: false, error: 'dailyMode must be balanced or random' }
++    }
++    return { ok: true, value: { dailyCount, dailyMode } }
++  }
++}
++
++export const settingsFactsDeclaration: FactsDeclaration = {
++  kind: 'facts',
++  id: 'settings.current_facts',
++  surface: 'settings',
++  title: 'Settings status facts',
++  description: 'Bounded settings-surface facts with counts and status only. Raw quote and book text is never included.',
++  facts: ['route', 'library', 'backup', 'security', 'preferences', 'storage', 'policy'],
++  maxTopLevelFacts: 8,
++  rawContentIncluded: false,
++  publish(context) {
++    const counts = libraryCounts(context)
++
++    return {
++      route: {
++        path: context.route,
++        surface: 'settings',
++        live: context.activeSurfaceId === 'settings'
++      },
++      library: {
++        signalCount: counts.signalCount,
++        inboxCount: counts.inboxCount,
++        quoteCount: counts.quoteCount,
++        bookCount: counts.bookCount,
++        totalEntries: counts.totalEntries,
++        rawContentIncluded: false
++      },
++      backup: {
++        state: context.backup.backupState,
++        lastBackupAt: context.backup.lastBackupAt ?? null,
++        ageDays: context.backup.backupAgeDays ?? null
++      },
++      security: {
++        protection: protectionLevel(context),
++        pinEnabled: context.security.pinEnabled,
++        encryptionEnabled: context.security.encryptionEnabled,
++        encryptionUnlocked: context.security.encryptionUnlocked
++      },
++      preferences: {
++        theme: context.settings.theme,
++        dailyReview: {
++          count: context.settings.dailyCount,
++          mode: context.settings.dailyMode
++        },
++        reminders: {
++          enabled: context.settings.reminderEnabled,
++          time: context.settings.reminderTime
++        }
++      },
++      storage: {
++        model: 'local-first',
++        backend: 'none',
++        primaryStore: 'IndexedDB',
++        preferencesStore: 'localStorage'
++      },
++      policy: {
++        posture: 'sensitive-domain',
++        safeReversiblePreferenceActions: 'ungated',
++        sensitiveExternalActions: 'step-gated'
++      }
++    }
++  }
++}
++
++export const readToolDeclarations: readonly ReadToolDeclaration[] = [
++  {
++    kind: 'read_tool',
++    id: 'settings.get_local_status',
++    surface: 'settings',
++    title: 'Get local settings status',
++    description: 'Returns local counts, protection status, and preference settings without raw quote text.',
++    params: emptyParams,
++    reads: ['settings.current_facts'],
++    externalExposure: 'none',
++    rawContentIncluded: false,
++    read(context) {
++      const facts = settingsFactsDeclaration.publish(context)
++      return {
++        summary: 'Local settings status returned without raw quote or book text.',
++        data: facts
++      }
++    }
++  },
++  {
++    kind: 'read_tool',
++    id: 'backup.get_status',
++    surface: 'settings',
++    title: 'Get backup status',
++    description: 'Returns backup freshness and entry counts without generating a file.',
++    params: emptyParams,
++    reads: ['backup.last_backup_at', 'library.counts'],
++    externalExposure: 'none',
++    rawContentIncluded: false,
++    read(context) {
++      const counts = libraryCounts(context)
++      return {
++        summary: `${context.backup.backupState} backup status for ${counts.totalEntries} local entries.`,
++        data: {
++          state: context.backup.backupState,
++          lastBackupAt: context.backup.lastBackupAt ?? null,
++          ageDays: context.backup.backupAgeDays ?? null,
++          totalEntries: counts.totalEntries,
++          rawContentIncluded: false
++        }
++      }
++    }
++  },
++  {
++    kind: 'read_tool',
++    id: 'library.get_export_summary',
++    surface: 'settings',
++    title: 'Get export summary',
++    description: 'Summarizes exportable counts and sensitivity without exposing quote or book contents.',
++    params: emptyParams,
++    reads: ['library.counts', 'backup.supported_formats'],
++    externalExposure: 'none',
++    rawContentIncluded: false,
++    read(context) {
++      const counts = libraryCounts(context)
++      return {
++        summary: 'Export scope summarized without raw content.',
++        data: {
++          formats: ['json', 'csv', 'markdown'],
++          quoteCount: counts.quoteCount,
++          bookCount: counts.bookCount,
++          totalEntries: counts.totalEntries,
++          includesSensitiveContent: counts.totalEntries > 0,
++          rawContentIncluded: false
++        }
++      }
++    }
++  }
++]
++
++export const actionDeclarations: readonly ActionDeclaration[] = [
++  {
++    kind: 'action',
++    id: 'settings.set_theme',
++    surface: 'settings',
++    title: 'Set theme',
++    description: 'Change the light or dark appearance preference.',
++    params: themeParams,
++    reads: ['settings.theme'],
++    writes: ['settings.theme', 'localStorage.quiet-signal-review-settings', 'document.theme_class'],
++    risk: 'safe',
++    reversibility: 'undoable',
++    effects: { external: false, cost: 'none', sensitive: false },
++    confirmation: 'never',
++    externalExposure: 'none',
++    guidance: 'Use for reversible preference changes only; do not use it as authority for content or security changes.',
++    examples: [
++      { label: 'Use dark mode', params: { theme: 'dark' } },
++      { label: 'Use light mode', params: { theme: 'light' } }
++    ],
++    preconditions() {
++      return { ok: true }
++    },
++    captureUndo(context) {
++      return { theme: context.settings.theme }
++    },
++    execute(context, params) {
++      const theme = params.theme === 'dark' ? 'dark' : 'light'
++      context.settings.setTheme(theme)
++      return {
++        summary: `Theme set to ${theme}.`,
++        data: { theme }
++      }
++    },
++    undo(context, undo) {
++      const theme = undo.theme === 'dark' ? 'dark' : 'light'
++      context.settings.setTheme(theme)
++      return {
++        summary: `Theme restored to ${theme}.`,
++        data: { theme }
++      }
++    }
++  },
++  {
++    kind: 'action',
++    id: 'settings.set_daily_review',
++    surface: 'settings',
++    title: 'Set daily review',
++    description: 'Change the number of daily highlights and selection mode.',
++    params: dailyReviewParams,
++    reads: ['settings.daily_review'],
++    writes: ['settings.daily_review', 'localStorage.quiet-signal-review-settings'],
++    risk: 'safe',
++    reversibility: 'undoable',
++    effects: { external: false, cost: 'none', sensitive: false },
++    confirmation: 'never',
++    externalExposure: 'none',
++    guidance: 'Use for reversible local preference changes; keep content selection and quote text out of parameters.',
++    examples: [
++      { label: 'Balanced daily review', params: { dailyCount: 5, dailyMode: 'balanced' } },
++      { label: 'Short random daily review', params: { dailyCount: 3, dailyMode: 'random' } }
++    ],
++    preconditions() {
++      return { ok: true }
++    },
++    captureUndo(context) {
++      return {
++        dailyCount: context.settings.dailyCount,
++        dailyMode: context.settings.dailyMode
++      }
++    },
++    execute(context, params) {
++      const dailyCount = typeof params.dailyCount === 'number' ? params.dailyCount : 5
++      const dailyMode = params.dailyMode === 'random' ? 'random' : 'balanced'
++      context.settings.setDailyCount(dailyCount)
++      context.settings.setDailyMode(dailyMode)
++      return {
++        summary: `Daily review set to ${dailyCount} ${dailyMode} items.`,
++        data: { dailyCount, dailyMode }
++      }
++    },
++    undo(context, undo) {
++      const dailyCount = typeof undo.dailyCount === 'number' ? undo.dailyCount : 5
++      const dailyMode = undo.dailyMode === 'random' ? 'random' : 'balanced'
++      context.settings.setDailyCount(dailyCount)
++      context.settings.setDailyMode(dailyMode)
++      return {
++        summary: `Daily review restored to ${dailyCount} ${dailyMode} items.`,
++        data: { dailyCount, dailyMode }
++      }
++    }
++  },
++  {
++    kind: 'action',
++    id: 'backup.download_json',
++    surface: 'settings',
++    title: 'Download JSON backup',
++    description: 'Create a local JSON backup file containing the current quotes and books.',
++    params: emptyParams,
++    reads: ['library.quotes', 'library.books', 'backup.status'],
++    writes: ['device.downloads', 'localStorage.quiet-signal-last-backup-at'],
++    risk: 'side_effect',
++    reversibility: 'irreversible',
++    effects: { external: true, cost: 'none', sensitive: true },
++    confirmation: 'policy',
++    externalExposure: 'none',
++    guidance: 'This leaves app-controlled storage and includes user content; require an explicit approval step.',
++    examples: [{ label: 'Download a JSON backup', params: {} }],
++    preconditions(context) {
++      if (context.security.encryptionEnabled && !context.security.encryptionUnlocked) {
++        return { ok: false, reason: 'Vault is locked; unlock before exporting a backup.' }
++      }
++      return { ok: true }
++    },
++    execute(context) {
++      const timestamp = context.backup.downloadBackup(context.quotes, context.books)
++      return {
++        summary: 'JSON backup download started.',
++        data: {
++          timestamp,
++          quoteCount: context.quotes.length,
++          bookCount: context.books.length,
++          downloadIncludesRawContent: true
++        }
++      }
++    }
++  }
++]
++
++export const surfaceDeclarations: readonly SurfaceDeclaration[] = [
++  {
++    kind: 'surface',
++    id: 'settings',
++    route: '/settings',
++    title: 'Settings',
++    description: 'Local preferences, privacy, backup, and release-readiness controls.',
++    facts: ['settings.current_facts'],
++    readTools: ['settings.get_local_status', 'backup.get_status', 'library.get_export_summary'],
++    actions: ['settings.set_theme', 'settings.set_daily_review', 'backup.download_json']
++  }
++]
++
++export const quietSignalRegistry: SteerableRegistry = createRegistry({
++  posture: 'sensitive-domain',
++  surfaces: surfaceDeclarations,
++  facts: [settingsFactsDeclaration],
++  readTools: readToolDeclarations,
++  actions: actionDeclarations
++})
++
++export function getSurfaceDeclaration(id: SurfaceDeclaration['id']) {
++  return quietSignalRegistry.surfaces.find((surface) => surface.id === id)
++}
++
++export function getReadToolDeclaration(id: ReadToolDeclaration['id']) {
++  return quietSignalRegistry.readTools.find((tool) => tool.id === id)
++}
++
++export function getActionDeclaration(id: ActionDeclaration['id']) {
++  return quietSignalRegistry.actions.find((action) => action.id === id)
++}
++
++export function libraryCounts(context: RuntimeContext) {
++  const inboxCount = context.quotes.filter((quote) => quoteStatus(quote) === 'inbox').length
++  const quoteCount = context.quotes.length
++  const bookCount = context.books.length
++
++  return {
++    inboxCount,
++    signalCount: quoteCount - inboxCount,
++    quoteCount,
++    bookCount,
++    totalEntries: quoteCount + bookCount
++  }
++}
++
++function protectionLevel(context: RuntimeContext) {
++  if (context.security.pinEnabled && context.security.encryptionEnabled) return 'pin-and-vault'
++  if (context.security.pinEnabled) return 'pin-only'
++  if (context.security.encryptionEnabled) return 'vault-only'
++  return 'open'
++}
++
++function parsePlainObject(input: unknown) {
++  if (!input || typeof input !== 'object' || Array.isArray(input)) {
++    return { ok: false as const, error: 'Parameters must be an object.' }
++  }
++  return { ok: true as const, value: input as JsonObject }
++}
++
++function unknownKey(value: JsonObject, allowed: readonly string[]) {
++  return Object.keys(value).find((key) => !allowed.includes(key))
++}
++
++function createRegistry(registry: SteerableRegistry): SteerableRegistry {
++  const ids = [
++    ...registry.surfaces.map((surface) => surface.id),
++    ...registry.facts.map((facts) => facts.id),
++    ...registry.readTools.map((tool) => tool.id),
++    ...registry.actions.map((action) => action.id)
++  ]
++  assertUnique(ids)
++
++  for (const surface of registry.surfaces) {
++    assertRefs(surface.facts, registry.facts.map((facts) => facts.id), `${surface.id}.facts`)
++    assertRefs(surface.readTools, registry.readTools.map((tool) => tool.id), `${surface.id}.readTools`)
++    assertRefs(surface.actions, registry.actions.map((action) => action.id), `${surface.id}.actions`)
++  }
++
++  return registry
++}
++
++function assertUnique(ids: readonly string[]) {
++  const seen = new Set<string>()
++  for (const id of ids) {
++    if (seen.has(id)) throw new Error(`Duplicate Steerable capability id: ${id}`)
++    seen.add(id)
++  }
++}
++
++function assertRefs(refs: readonly string[], ids: readonly string[], label: string) {
++  for (const ref of refs) {
++    if (!ids.includes(ref)) throw new Error(`Unknown Steerable reference in ${label}: ${ref}`)
++  }
++}
++
++export function expectedBackupState(context: RuntimeContext) {
++  return classifyBackupState(context.quotes.length + context.books.length, context.backup.lastBackupAt)
++}
+diff --git a/src/steerable/fixtures.ts b/src/steerable/fixtures.ts
+new file mode 100644
+index 0000000..bc6ee6f
+--- /dev/null
++++ b/src/steerable/fixtures.ts
+@@ -0,0 +1,227 @@
++import {
++  actionDeclarations,
++  quietSignalSteerableTarget,
++  quietSignalRegistry,
++  readToolDeclarations,
++  settingsFactsDeclaration
++} from './capabilities'
++import { readOnlyPolicyDecision, resolveActionPolicy } from './policy'
++import type { ActionDeclaration, CapabilityId, JsonObject, PolicyMode, RuntimeContext } from './schema'
++
++export type SteerableFixtureKind = 'facts' | 'read_tool' | 'action' | 'undo'
++
++export interface SteerableFixture {
++  id: string
++  kind: SteerableFixtureKind
++  coverageCell: string
++  route: '/settings'
++  capabilityId: CapabilityId
++  params: JsonObject
++  expectedMode?: PolicyMode
++  expectUndo?: boolean
++}
++
++export interface ProbeResult {
++  ok: boolean
++  summary: string
++  checked: number
++  failures: string[]
++  coverageCells: string[]
++}
++
++export const quietSignalSteerableFixtures: readonly SteerableFixture[] = [
++  {
++    id: 'QS-STEER-FACTS-001',
++    kind: 'facts',
++    coverageCell: 'settings/facts/counts-status-no-raw-content',
++    route: '/settings',
++    capabilityId: 'settings.current_facts',
++    params: {}
++  },
++  {
++    id: 'QS-STEER-READ-001',
++    kind: 'read_tool',
++    coverageCell: 'settings/read/local-status-no-raw-content',
++    route: '/settings',
++    capabilityId: 'settings.get_local_status',
++    params: {},
++    expectedMode: 'Read-only'
++  },
++  {
++    id: 'QS-STEER-READ-002',
++    kind: 'read_tool',
++    coverageCell: 'settings/read/backup-status-no-file',
++    route: '/settings',
++    capabilityId: 'backup.get_status',
++    params: {},
++    expectedMode: 'Read-only'
++  },
++  {
++    id: 'QS-STEER-ACTION-001',
++    kind: 'action',
++    coverageCell: 'settings/action/theme-safe-undoable-ungated',
++    route: '/settings',
++    capabilityId: 'settings.set_theme',
++    params: { theme: 'dark' },
++    expectedMode: 'Optimistic chain',
++    expectUndo: true
++  },
++  {
++    id: 'QS-STEER-ACTION-002',
++    kind: 'action',
++    coverageCell: 'settings/action/daily-review-safe-undoable-ungated',
++    route: '/settings',
++    capabilityId: 'settings.set_daily_review',
++    params: { dailyCount: 5, dailyMode: 'balanced' },
++    expectedMode: 'Optimistic chain',
++    expectUndo: true
++  },
++  {
++    id: 'QS-STEER-GATED-001',
++    kind: 'action',
++    coverageCell: 'settings/action/backup-sensitive-external-step-gated',
++    route: '/settings',
++    capabilityId: 'backup.download_json',
++    params: {},
++    expectedMode: 'Step-gated',
++    expectUndo: false
++  },
++  {
++    id: 'QS-STEER-UNDO-001',
++    kind: 'undo',
++    coverageCell: 'settings/undo/theme-restores-previous-preference',
++    route: '/settings',
++    capabilityId: 'settings.set_theme',
++    params: { theme: 'light' },
++    expectedMode: 'Optimistic chain',
++    expectUndo: true
++  },
++  {
++    id: 'QS-STEER-UNDO-002',
++    kind: 'undo',
++    coverageCell: 'settings/undo/backup-honest-irrevocable-refusal',
++    route: '/settings',
++    capabilityId: 'backup.download_json',
++    params: {},
++    expectedMode: 'Step-gated',
++    expectUndo: false
++  }
++]
++
++export const quietSignalSteerableAdapter = {
++  target: quietSignalSteerableTarget.integrationId,
++  integrationId: quietSignalSteerableTarget.integrationId,
++  registry: {
++    id: quietSignalSteerableTarget.registryId,
++    version: quietSignalSteerableTarget.registryVersion,
++    ref: quietSignalSteerableTarget.registryRef
++  },
++  route(fixture: SteerableFixture) {
++    return fixture.route
++  },
++  resolve(fixture: SteerableFixture) {
++    if (fixture.kind === 'facts') {
++      return { declaration: settingsFactsDeclaration, policy: readOnlyPolicyDecision() }
++    }
++
++    const readTool = readToolDeclarations.find((tool) => tool.id === fixture.capabilityId)
++    if (readTool) return { declaration: readTool, policy: readOnlyPolicyDecision() }
++
++    const action = actionDeclarations.find((candidate) => candidate.id === fixture.capabilityId)
++    return action ? { declaration: action, policy: resolveActionPolicy(action) } : null
++  },
++  execute(fixture: SteerableFixture, context: RuntimeContext) {
++    const resolved = this.resolve(fixture)
++    if (!resolved) return { ok: false, message: `Unknown fixture capability: ${fixture.capabilityId}` }
++    const parsed = resolved.declaration.kind === 'facts' ? { ok: true as const, value: {} } : resolved.declaration.params.parse(fixture.params)
++    if (!parsed.ok) return { ok: false, message: parsed.error }
++
++    if (resolved.declaration.kind === 'facts') {
++      return { ok: true, result: resolved.declaration.publish(context) }
++    }
++    if (resolved.declaration.kind === 'read_tool') {
++      return { ok: true, result: resolved.declaration.read(context, parsed.value) }
++    }
++    if (resolved.policy.requiresApproval) {
++      return { ok: true, result: { held: true, mode: resolved.policy.mode } }
++    }
++    return { ok: true, result: resolved.declaration.execute(context, parsed.value) }
++  },
++  undo(fixture: SteerableFixture, context: RuntimeContext, undoPayload: JsonObject) {
++    const action = actionDeclarations.find((candidate) => candidate.id === fixture.capabilityId)
++    if (!action?.undo) return { ok: false, message: `No undo is available for ${fixture.capabilityId}` }
++    return { ok: true, result: action.undo(context, undoPayload) }
++  }
++}
++
++export function runSteerableFixtureProbe(): ProbeResult {
++  const failures: string[] = []
++  const fixtureIds = new Set<string>()
++  const coverageCells = new Set<string>()
++  const registryIds = [
++    ...quietSignalRegistry.surfaces.map((surface) => surface.id),
++    ...quietSignalRegistry.facts.map((facts) => facts.id),
++    ...quietSignalRegistry.readTools.map((tool) => tool.id),
++    ...quietSignalRegistry.actions.map((action) => action.id)
++  ]
++
++  findDuplicates(registryIds).forEach((id) => failures.push(`Duplicate registry id: ${id}`))
++
++  for (const fixture of quietSignalSteerableFixtures) {
++    if (fixtureIds.has(fixture.id)) failures.push(`Duplicate fixture id: ${fixture.id}`)
++    fixtureIds.add(fixture.id)
++    coverageCells.add(fixture.coverageCell)
++
++    if (fixture.route !== '/settings') failures.push(`${fixture.id} must stay scoped to /settings`)
++
++    const resolved = quietSignalSteerableAdapter.resolve(fixture)
++    if (!resolved) {
++      failures.push(`${fixture.id} references unknown capability ${fixture.capabilityId}`)
++      continue
++    }
++
++    if (resolved.declaration.kind !== 'facts') {
++      const parsed = resolved.declaration.params.parse(fixture.params)
++      if (!parsed.ok) failures.push(`${fixture.id} has invalid params: ${parsed.error}`)
++    }
++
++    if (resolved.declaration.kind === 'facts' && resolved.declaration.rawContentIncluded !== false) {
++      failures.push(`${fixture.id} facts must not include raw content`)
++    }
++
++    if (resolved.declaration.kind === 'read_tool' && resolved.declaration.rawContentIncluded !== false) {
++      failures.push(`${fixture.id} read tool must not include raw content`)
++    }
++
++    if (fixture.expectedMode && resolved.policy.mode !== fixture.expectedMode) {
++      failures.push(`${fixture.id} expected ${fixture.expectedMode}, got ${resolved.policy.mode}`)
++    }
++
++    if (resolved.declaration.kind === 'action') {
++      checkUndoExpectation(fixture, resolved.declaration, failures)
++    }
++  }
++
++  return {
++    ok: failures.length === 0,
++    summary: failures.length === 0 ? 'Steerable fixture probe passed.' : 'Steerable fixture probe failed.',
++    checked: quietSignalSteerableFixtures.length,
++    failures,
++    coverageCells: [...coverageCells]
++  }
++}
++
++function checkUndoExpectation(fixture: SteerableFixture, action: ActionDeclaration, failures: string[]) {
++  if (fixture.expectUndo === true && !action.undo) failures.push(`${fixture.id} expected undo but ${action.id} has none`)
++  if (fixture.expectUndo === false && action.undo) failures.push(`${fixture.id} expected honest no-undo but ${action.id} has undo`)
++}
++
++function findDuplicates(ids: readonly string[]) {
++  const seen = new Set<string>()
++  const duplicates = new Set<string>()
++  for (const id of ids) {
++    if (seen.has(id)) duplicates.add(id)
++    seen.add(id)
++  }
++  return [...duplicates]
++}
+diff --git a/src/steerable/policy.ts b/src/steerable/policy.ts
+new file mode 100644
+index 0000000..5749f93
+--- /dev/null
++++ b/src/steerable/policy.ts
+@@ -0,0 +1,82 @@
++import type { ActionDeclaration, PolicyMode, PolicyPosture } from './schema'
++
++export interface PolicyDecision {
++  posture: PolicyPosture
++  mode: PolicyMode
++  requiresApproval: boolean
++  reasons: string[]
++}
++
++export const quietSignalPolicyPosture: PolicyPosture = 'sensitive-domain'
++
++export const policyTemplateContrast = {
++  stableDeclarations: ['settings.set_theme', 'settings.set_daily_review', 'backup.download_json'],
++  sensitiveDomainOutcomes: {
++    'settings.set_theme': 'Optimistic chain',
++    'settings.set_daily_review': 'Optimistic chain',
++    'backup.download_json': 'Step-gated'
++  }
++} as const
++
++export function resolveActionPolicy(action: ActionDeclaration): PolicyDecision {
++  if (action.confirmation === 'always') {
++    return stepGated(['confirmation_always'])
++  }
++
++  if (isCleanSafeReversible(action)) {
++    return {
++      posture: quietSignalPolicyPosture,
++      mode: 'Optimistic chain',
++      requiresApproval: false,
++      reasons: ['safe_reversible_preference']
++    }
++  }
++
++  if (action.effects.sensitive && (action.effects.external || action.reversibility === 'irreversible')) {
++    return stepGated(['sensitive_external_irreversible'])
++  }
++
++  if (action.risk === 'side_effect' || action.effects.external || action.reversibility === 'irreversible') {
++    return stepGated(['side_effect_external_or_irreversible'])
++  }
++
++  if (action.risk === 'destructive') {
++    return stepGated(['destructive_action'])
++  }
++
++  return {
++    posture: quietSignalPolicyPosture,
++    mode: 'Plan preview',
++    requiresApproval: true,
++    reasons: ['not_clean_safe_reversible']
++  }
++}
++
++export function readOnlyPolicyDecision(): PolicyDecision {
++  return {
++    posture: quietSignalPolicyPosture,
++    mode: 'Read-only',
++    requiresApproval: false,
++    reasons: ['read_only_bounded_context']
++  }
++}
++
++function isCleanSafeReversible(action: ActionDeclaration) {
++  return (
++    action.risk === 'safe' &&
++    (action.reversibility === 'undoable' || action.reversibility === 'snapshot') &&
++    action.effects.external === false &&
++    action.effects.cost === 'none' &&
++    action.effects.sensitive === false &&
++    action.confirmation !== 'always'
++  )
++}
++
++function stepGated(reasons: string[]): PolicyDecision {
++  return {
++    posture: quietSignalPolicyPosture,
++    mode: 'Step-gated',
++    requiresApproval: true,
++    reasons
++  }
++}
+diff --git a/src/steerable/runtime.tsx b/src/steerable/runtime.tsx
+new file mode 100644
+index 0000000..27797e0
+--- /dev/null
++++ b/src/steerable/runtime.tsx
+@@ -0,0 +1,595 @@
++import { useCallback, useMemo, useState, type ReactNode } from 'react'
++import { useLocation } from 'react-router-dom'
++import { backupAgeDays, backupState, downloadBackup, getLastBackupAt } from '../services/backup'
++import { hasPinLock, isEncryptionEnabled, isEncryptionUnlocked } from '../services/security'
++import { useBookStore } from '../store/useBookStore'
++import { useQuoteStore } from '../store/useQuoteStore'
++import { useSettingsStore } from '../store/useSettingsStore'
++import {
++  getActionDeclaration,
++  getReadToolDeclaration,
++  quietSignalRegistry,
++  settingsFactsDeclaration
++} from './capabilities'
++import { runSteerableFixtureProbe } from './fixtures'
++import { readOnlyPolicyDecision, resolveActionPolicy, type PolicyDecision } from './policy'
++import { SteerableRuntimeContext, type LedgerRecord, type LedgerUndoState, type SteerableRuntimeValue } from './runtimeState'
++import type { ActionDeclaration, JsonObject, RuntimeContext, SurfaceId } from './schema'
++
++export function SteerableProvider({ children }: { children: ReactNode }) {
++  const location = useLocation()
++  const quotes = useQuoteStore((state) => state.quotes)
++  const books = useBookStore((state) => state.books)
++  const settings = useSettingsStore()
++  const [records, setRecords] = useState<LedgerRecord[]>([])
++
++  const activeSurfaceId: SurfaceId | null = location.pathname === '/settings' ? 'settings' : null
++  const lastBackupAt = getLastBackupAt()
++  const currentBackupAge = backupAgeDays(lastBackupAt)
++  const currentBackupState = backupState(quotes.length + books.length, lastBackupAt)
++
++  const runtimeContext: RuntimeContext = useMemo(
++    () => ({
++      route: location.pathname,
++      activeSurfaceId,
++      quotes,
++      books,
++      settings: {
++        theme: settings.theme,
++        dailyCount: settings.dailyCount,
++        dailyMode: settings.dailyMode,
++        reminderEnabled: settings.reminderEnabled,
++        reminderTime: settings.reminderTime,
++        setTheme: settings.setTheme,
++        setDailyCount: settings.setDailyCount,
++        setDailyMode: settings.setDailyMode
++      },
++      security: {
++        pinEnabled: hasPinLock(),
++        encryptionEnabled: isEncryptionEnabled(),
++        encryptionUnlocked: isEncryptionUnlocked()
++      },
++      backup: {
++        lastBackupAt,
++        backupAgeDays: currentBackupAge,
++        backupState: currentBackupState,
++        downloadBackup
++      },
++      now: () => new Date()
++    }),
++    [
++      activeSurfaceId,
++      books,
++      currentBackupAge,
++      currentBackupState,
++      lastBackupAt,
++      location.pathname,
++      quotes,
++      settings.dailyCount,
++      settings.dailyMode,
++      settings.reminderEnabled,
++      settings.reminderTime,
++      settings.setDailyCount,
++      settings.setDailyMode,
++      settings.setTheme,
++      settings.theme
++    ]
++  )
++
++  const facts = useMemo(() => (activeSurfaceId === 'settings' ? settingsFactsDeclaration.publish(runtimeContext) : null), [activeSurfaceId, runtimeContext])
++
++  const appendRecord = useCallback((record: LedgerRecord) => {
++    setRecords((current) => [record, ...current].slice(0, 20))
++  }, [])
++
++  const patchRecord = useCallback((recordId: string, patch: Partial<LedgerRecord>) => {
++    setRecords((current) => current.map((record) => (record.id === recordId ? { ...record, ...patch } : record)))
++  }, [])
++
++  const publishFacts = useCallback(() => {
++    const policy = readOnlyPolicyDecision()
++    if (activeSurfaceId !== 'settings') {
++      appendRecord(
++        baseRecord({
++          kind: 'facts',
++          surfaceId: activeSurfaceId,
++          capabilityId: 'settings.current_facts',
++          title: settingsFactsDeclaration.title,
++          status: 'failed',
++          mode: policy.mode,
++          policyReasons: policy.reasons,
++          params: {},
++          error: 'Settings surface is not active.'
++        })
++      )
++      return
++    }
++
++    appendRecord(
++      baseRecord({
++        kind: 'facts',
++        surfaceId: activeSurfaceId,
++        capabilityId: 'settings.current_facts',
++        title: settingsFactsDeclaration.title,
++        status: 'succeeded',
++        mode: policy.mode,
++        policyReasons: policy.reasons,
++        params: {},
++        result: {
++          summary: 'Settings facts published without raw content.',
++          data: settingsFactsDeclaration.publish(runtimeContext)
++        }
++      })
++    )
++  }, [activeSurfaceId, appendRecord, runtimeContext])
++
++  const invokeReadTool = useCallback(
++    async (id: Parameters<typeof getReadToolDeclaration>[0], params: JsonObject = {}) => {
++      const tool = getReadToolDeclaration(id)
++      const policy = readOnlyPolicyDecision()
++
++      if (!tool) {
++        appendRecord(
++          baseRecord({
++            kind: 'read_tool',
++            surfaceId: activeSurfaceId,
++            capabilityId: id,
++            title: id,
++            status: 'failed',
++            mode: policy.mode,
++            policyReasons: policy.reasons,
++            params,
++            error: 'Unknown read tool.'
++          })
++        )
++        return
++      }
++
++      const parsed = tool.params.parse(params)
++      if (!parsed.ok) {
++        appendRecord(
++          baseRecord({
++            kind: 'read_tool',
++            surfaceId: activeSurfaceId,
++            capabilityId: tool.id,
++            title: tool.title,
++            status: 'failed',
++            mode: policy.mode,
++            policyReasons: policy.reasons,
++            params,
++            error: parsed.error
++          })
++        )
++        return
++      }
++
++      if (activeSurfaceId !== tool.surface) {
++        appendRecord(
++          baseRecord({
++            kind: 'read_tool',
++            surfaceId: activeSurfaceId,
++            capabilityId: tool.id,
++            title: tool.title,
++            status: 'failed',
++            mode: policy.mode,
++            policyReasons: policy.reasons,
++            params: parsed.value,
++            error: 'Read tool surface is not active.'
++          })
++        )
++        return
++      }
++
++      try {
++        appendRecord(
++          baseRecord({
++            kind: 'read_tool',
++            surfaceId: activeSurfaceId,
++            capabilityId: tool.id,
++            title: tool.title,
++            status: 'succeeded',
++            mode: policy.mode,
++            policyReasons: policy.reasons,
++            params: parsed.value,
++            result: tool.read(runtimeContext, parsed.value)
++          })
++        )
++      } catch (error) {
++        appendRecord(
++          baseRecord({
++            kind: 'read_tool',
++            surfaceId: activeSurfaceId,
++            capabilityId: tool.id,
++            title: tool.title,
++            status: 'failed',
++            mode: policy.mode,
++            policyReasons: policy.reasons,
++            params: parsed.value,
++            error: errorMessage(error)
++          })
++        )
++      }
++    },
++    [activeSurfaceId, appendRecord, runtimeContext]
++  )
++
++  const executeActionRecord = useCallback(
++    async (recordId: string, action: ActionDeclaration, params: JsonObject, decision: PolicyDecision, approval: 'approved' | undefined) => {
++      const undoPayload = action.captureUndo?.(runtimeContext, params)
++
++      try {
++        const result = await action.execute(runtimeContext, params)
++        patchRecord(recordId, {
++          status: 'succeeded',
++          approval,
++          result,
++          undoPayload,
++          undo: undoStateFor(action, undoPayload)
++        })
++      } catch (error) {
++        patchRecord(recordId, {
++          status: 'failed',
++          approval,
++          error: errorMessage(error),
++          undo: {
++            available: false,
++            status: 'failed',
++            reason: 'Action failed before an undo state was available.'
++          }
++        })
++      }
++
++      void decision
++    },
++    [patchRecord, runtimeContext]
++  )
++
++  const appendPolicyRecord = useCallback(
++    (action: ActionDeclaration, params: JsonObject, decision: PolicyDecision) => {
++      const recordId = ledgerId()
++      appendRecord(
++        baseRecord({
++          id: recordId,
++          kind: 'policy',
++          surfaceId: activeSurfaceId,
++          capabilityId: action.id,
++          title: `Policy for ${action.title}`,
++          status: 'succeeded',
++          mode: decision.mode,
++          policyReasons: decision.reasons,
++          params,
++          result: {
++            summary: `Resolved ${action.id} to ${decision.mode}.`,
++            data: {
++              actionId: action.id,
++              posture: decision.posture,
++              mode: decision.mode,
++              reasonCodes: decision.reasons,
++              risk: action.risk,
++              reversibility: action.reversibility,
++              effects: {
++                external: action.effects.external,
++                cost: action.effects.cost,
++                sensitive: action.effects.sensitive
++              },
++              confirmation: action.confirmation
++            }
++          }
++        })
++      )
++      return recordId
++    },
++    [activeSurfaceId, appendRecord]
++  )
++
++  const invokeAction = useCallback(
++    async (id: Parameters<typeof getActionDeclaration>[0], params: JsonObject = {}) => {
++      const action = getActionDeclaration(id)
++
++      if (!action) {
++        appendRecord(
++          baseRecord({
++            kind: 'action',
++            surfaceId: activeSurfaceId,
++            capabilityId: id,
++            title: id,
++            status: 'failed',
++            mode: 'Step-gated',
++            policyReasons: ['unknown_action'],
++            params,
++            error: 'Unknown action.'
++          })
++        )
++        return
++      }
++
++      const parsed = action.params.parse(params)
++      if (!parsed.ok) {
++        const decision = resolveActionPolicy(action)
++        appendRecord(
++          baseRecord({
++            kind: 'action',
++            surfaceId: activeSurfaceId,
++            capabilityId: action.id,
++            title: action.title,
++            status: 'failed',
++            mode: decision.mode,
++            policyReasons: decision.reasons,
++            params,
++            error: parsed.error
++          })
++        )
++        return
++      }
++
++      const surfaceError = activeSurfaceId !== action.surface ? 'Action surface is not active.' : null
++      const precondition = surfaceError ? { ok: false as const, reason: surfaceError } : action.preconditions(runtimeContext, parsed.value)
++      if (!precondition.ok) {
++        const decision = resolveActionPolicy(action)
++        appendRecord(
++          baseRecord({
++            kind: 'action',
++            surfaceId: activeSurfaceId,
++            capabilityId: action.id,
++            title: action.title,
++            status: 'failed',
++            mode: decision.mode,
++            policyReasons: decision.reasons,
++            params: parsed.value,
++            error: precondition.reason
++          })
++        )
++        return
++      }
++
++      const decision = resolveActionPolicy(action)
++      const policyRecordId = appendPolicyRecord(action, parsed.value, decision)
++      const record = baseRecord({
++        kind: 'action',
++        surfaceId: activeSurfaceId,
++        capabilityId: action.id,
++        relatedRecordId: policyRecordId,
++        title: action.title,
++        status: decision.requiresApproval ? 'pending_approval' : 'running',
++        mode: decision.mode,
++        policyReasons: decision.reasons,
++        params: parsed.value,
++        parsedParams: parsed.value,
++        approval: decision.requiresApproval ? 'pending' : undefined,
++        undo: decision.requiresApproval
++          ? {
++              available: false,
++              status: action.undo ? 'available' : 'not_supported',
++              reason: decision.requiresApproval ? 'Undo state is captured only if the approved action executes.' : ''
++            }
++          : undefined
++      })
++
++      appendRecord(record)
++      if (!decision.requiresApproval) {
++        await executeActionRecord(record.id, action, parsed.value, decision, undefined)
++      }
++    },
++    [activeSurfaceId, appendPolicyRecord, appendRecord, executeActionRecord, runtimeContext]
++  )
++
++  const approveRecord = useCallback(
++    async (recordId: string) => {
++      const record = records.find((candidate) => candidate.id === recordId)
++      const action = record?.kind === 'action' ? quietSignalRegistry.actions.find((candidate) => candidate.id === record.capabilityId) : undefined
++      if (!record || !action || record.status !== 'pending_approval' || !record.parsedParams) return
++
++      const decision = resolveActionPolicy(action)
++      const precondition = action.preconditions(runtimeContext, record.parsedParams)
++      if (!precondition.ok) {
++        patchRecord(record.id, {
++          status: 'failed',
++          approval: 'approved',
++          error: precondition.reason
++        })
++        return
++      }
++
++      appendRecord(
++        baseRecord({
++          kind: 'approval',
++          surfaceId: activeSurfaceId,
++          capabilityId: action.id,
++          relatedRecordId: record.id,
++          title: `Approve ${action.title}`,
++          status: 'succeeded',
++          mode: decision.mode,
++          policyReasons: decision.reasons,
++          params: record.parsedParams,
++          result: {
++            summary: 'User approved gated action execution.',
++            data: {
++              actionId: action.id,
++              approved: true
++            }
++          }
++        })
++      )
++      patchRecord(record.id, { status: 'running', approval: 'approved' })
++      await executeActionRecord(record.id, action, record.parsedParams, decision, 'approved')
++    },
++    [activeSurfaceId, appendRecord, executeActionRecord, patchRecord, records, runtimeContext]
++  )
++
++  const declineRecord = useCallback(
++    (recordId: string) => {
++      const record = records.find((candidate) => candidate.id === recordId)
++      if (record?.kind === 'action') {
++        appendRecord(
++          baseRecord({
++            kind: 'approval',
++            surfaceId: activeSurfaceId,
++            capabilityId: record.capabilityId,
++            relatedRecordId: record.id,
++            title: `Decline ${record.title}`,
++            status: 'declined',
++            mode: record.mode,
++            policyReasons: record.policyReasons,
++            params: record.parsedParams ?? record.params,
++            result: {
++              summary: 'User declined gated action execution.',
++              data: {
++                actionId: record.capabilityId,
++                approved: false
++              }
++            }
++          })
++        )
++      }
++      patchRecord(recordId, {
++        status: 'declined',
++        approval: 'declined',
++        result: {
++          summary: 'Action was declined before execution.'
++        },
++        undo: {
++          available: false,
++          status: 'not_supported',
++          reason: 'No execution occurred, so there is nothing to undo.'
++        }
++      })
++    },
++    [activeSurfaceId, appendRecord, patchRecord, records]
++  )
++
++  const undoRecord = useCallback(
++    async (recordId: string) => {
++      const record = records.find((candidate) => candidate.id === recordId)
++      const action = record?.kind === 'action' ? quietSignalRegistry.actions.find((candidate) => candidate.id === record.capabilityId) : undefined
++      if (!record || !action || !action.undo || !record.undoPayload) return
++
++      const undoRecordId = ledgerId()
++      const undoAttempt = baseRecord({
++        id: undoRecordId,
++        kind: 'undo',
++        surfaceId: activeSurfaceId,
++        capabilityId: action.id,
++        title: `Undo ${action.title}`,
++        status: 'running',
++        mode: record.mode,
++        policyReasons: ['undo_declared_handler'],
++        params: record.undoPayload
++      })
++      appendRecord(undoAttempt)
++
++      try {
++        const result = await action.undo(runtimeContext, record.undoPayload)
++        patchRecord(undoRecordId, {
++          status: 'succeeded',
++          result
++        })
++        patchRecord(record.id, {
++          status: 'undone',
++          undo: {
++            available: false,
++            status: 'completed',
++            reason: 'Undo completed through the action-owned handler.'
++          }
++        })
++      } catch (error) {
++        patchRecord(undoRecordId, {
++          status: 'failed',
++          error: errorMessage(error)
++        })
++        patchRecord(record.id, {
++          undo: {
++            available: true,
++            status: 'failed',
++            reason: errorMessage(error)
++          }
++        })
++      }
++    },
++    [activeSurfaceId, appendRecord, patchRecord, records, runtimeContext]
++  )
++
++  const runProbe = useCallback(() => {
++    const result = runSteerableFixtureProbe()
++    appendRecord(
++      baseRecord({
++        kind: 'probe',
++        surfaceId: activeSurfaceId,
++        capabilityId: 'steerable.fixture_probe',
++        title: 'Run fixture probe',
++        status: result.ok ? 'succeeded' : 'failed',
++        mode: 'Read-only',
++        policyReasons: ['local_fixture_probe_read_only'],
++        params: {},
++        result: {
++          summary: result.summary,
++          data: {
++            checked: result.checked,
++            failures: result.failures,
++            coverageCells: result.coverageCells
++          }
++        }
++      })
++    )
++  }, [activeSurfaceId, appendRecord])
++
++  const value = useMemo<SteerableRuntimeValue>(
++    () => ({
++      registry: quietSignalRegistry,
++      activeSurfaceId,
++      facts,
++      records,
++      publishFacts,
++      invokeReadTool,
++      invokeAction,
++      approveRecord,
++      declineRecord,
++      undoRecord,
++      runProbe
++    }),
++    [activeSurfaceId, approveRecord, declineRecord, facts, invokeAction, invokeReadTool, publishFacts, records, runProbe, undoRecord]
++  )
++
++  return <SteerableRuntimeContext.Provider value={value}>{children}</SteerableRuntimeContext.Provider>
++}
++
++function baseRecord(record: Omit<LedgerRecord, 'id' | 'schemaVersion' | 'at' | 'initiator'> & { id?: string; at?: string }): LedgerRecord {
++  return {
++    ...record,
++    id: record.id ?? ledgerId(),
++    schemaVersion: 'quiet-signal-steerable-ledger.v1',
++    initiator: 'steerable_panel',
++    at: record.at ?? new Date().toISOString()
++  }
++}
++
++function ledgerId() {
++  return crypto.randomUUID?.() ?? `ledger-${Date.now()}-${Math.random().toString(16).slice(2)}`
++}
++
++function undoStateFor(action: ActionDeclaration, undoPayload?: JsonObject): LedgerUndoState {
++  if (action.undo && undoPayload) {
++    return {
++      available: true,
++      status: 'available',
++      reason: 'Undo payload captured before execution.'
++    }
++  }
++
++  if (action.reversibility === 'irreversible') {
++    return {
++      available: false,
++      status: 'not_supported',
++      reason: 'The declaration is irreversible; no app-owned undo exists after execution.'
++    }
++  }
++
++  return {
++    available: false,
++    status: 'not_supported',
++    reason: 'No undo handler was declared for this action.'
++  }
++}
++
++function errorMessage(error: unknown) {
++  return error instanceof Error ? error.message : String(error)
++}
+diff --git a/src/steerable/runtimeState.ts b/src/steerable/runtimeState.ts
+new file mode 100644
+index 0000000..9a05779
+--- /dev/null
++++ b/src/steerable/runtimeState.ts
+@@ -0,0 +1,56 @@
++import { createContext, useContext } from 'react'
++import { getActionDeclaration, getReadToolDeclaration, quietSignalRegistry } from './capabilities'
++import type { CapabilityId, ExecutionResult, JsonObject, PolicyMode, SurfaceId } from './schema'
++
++export type LedgerRecordKind = 'facts' | 'read_tool' | 'policy' | 'approval' | 'action' | 'undo' | 'probe'
++export type LedgerRecordStatus = 'running' | 'pending_approval' | 'succeeded' | 'failed' | 'declined' | 'undone'
++
++export interface LedgerUndoState {
++  available: boolean
++  status: 'available' | 'completed' | 'not_supported' | 'failed'
++  reason: string
++}
++
++export interface LedgerRecord {
++  id: string
++  schemaVersion: 'quiet-signal-steerable-ledger.v1'
++  at: string
++  kind: LedgerRecordKind
++  initiator: 'steerable_panel'
++  surfaceId: SurfaceId | null
++  capabilityId: CapabilityId | 'steerable.fixture_probe'
++  relatedRecordId?: string
++  title: string
++  status: LedgerRecordStatus
++  mode: PolicyMode
++  policyReasons: string[]
++  params: JsonObject
++  result?: ExecutionResult
++  error?: string
++  approval?: 'pending' | 'approved' | 'declined'
++  undo?: LedgerUndoState
++  undoPayload?: JsonObject
++  parsedParams?: JsonObject
++}
++
++export interface SteerableRuntimeValue {
++  registry: typeof quietSignalRegistry
++  activeSurfaceId: SurfaceId | null
++  facts: JsonObject | null
++  records: LedgerRecord[]
++  publishFacts: () => void
++  invokeReadTool: (id: Parameters<typeof getReadToolDeclaration>[0], params?: JsonObject) => Promise<void>
++  invokeAction: (id: Parameters<typeof getActionDeclaration>[0], params?: JsonObject) => Promise<void>
++  approveRecord: (recordId: string) => Promise<void>
++  declineRecord: (recordId: string) => void
++  undoRecord: (recordId: string) => Promise<void>
++  runProbe: () => void
++}
++
++export const SteerableRuntimeContext = createContext<SteerableRuntimeValue | null>(null)
++
++export function useSteerableRuntime() {
++  const value = useContext(SteerableRuntimeContext)
++  if (!value) throw new Error('useSteerableRuntime must be used inside SteerableProvider')
++  return value
++}
+diff --git a/src/steerable/schema.ts b/src/steerable/schema.ts
+new file mode 100644
+index 0000000..1cca596
+--- /dev/null
++++ b/src/steerable/schema.ts
+@@ -0,0 +1,159 @@
++import type { Book } from '../types/book'
++import type { Quote } from '../types/quote'
++import type { AppTheme, DailyMode } from '../store/useSettingsStore'
++import type { BackupState } from '../services/backup'
++
++export type JsonValue = string | number | boolean | null | JsonObject | JsonValue[]
++export type JsonObject = { [key: string]: JsonValue }
++
++export type SurfaceId = 'settings'
++export type CapabilityId =
++  | 'settings.current_facts'
++  | 'settings.get_local_status'
++  | 'backup.get_status'
++  | 'library.get_export_summary'
++  | 'settings.set_theme'
++  | 'settings.set_daily_review'
++  | 'backup.download_json'
++
++export type RiskClass = 'safe' | 'side_effect' | 'destructive'
++export type Reversibility = 'undoable' | 'snapshot' | 'irreversible'
++export type ConfirmationRule = 'never' | 'policy' | 'always'
++export type PolicyPosture = 'sensitive-domain'
++export type PolicyMode = 'Read-only' | 'Instant execution' | 'Optimistic chain' | 'Plan preview' | 'Step-gated' | 'Gated suffix'
++export type ExternalExposure = 'none' | 'eligible'
++
++export interface EffectFlags {
++  external: boolean
++  cost: 'none' | 'metered'
++  sensitive: boolean
++}
++
++export interface RuntimeContext {
++  route: string
++  activeSurfaceId: SurfaceId | null
++  quotes: Quote[]
++  books: Book[]
++  settings: {
++    theme: AppTheme
++    dailyCount: number
++    dailyMode: DailyMode
++    reminderEnabled: boolean
++    reminderTime: string
++    setTheme: (theme: AppTheme) => void
++    setDailyCount: (count: number) => void
++    setDailyMode: (mode: DailyMode) => void
++  }
++  security: {
++    pinEnabled: boolean
++    encryptionEnabled: boolean
++    encryptionUnlocked: boolean
++  }
++  backup: {
++    lastBackupAt?: string
++    backupAgeDays?: number
++    backupState: BackupState
++    downloadBackup: (quotes: Quote[], books: Book[]) => string
++  }
++  now: () => Date
++}
++
++export interface ParseSuccess {
++  ok: true
++  value: JsonObject
++}
++
++export interface ParseFailure {
++  ok: false
++  error: string
++}
++
++export type ParseResult = ParseSuccess | ParseFailure
++
++export interface ParamSchema {
++  description: string
++  example: JsonObject
++  parse: (input: unknown) => ParseResult
++}
++
++export interface ExecutionResult {
++  summary: string
++  data?: JsonObject
++}
++
++export interface PreconditionSuccess {
++  ok: true
++}
++
++export interface PreconditionFailure {
++  ok: false
++  reason: string
++}
++
++export type PreconditionResult = PreconditionSuccess | PreconditionFailure
++
++export interface FactsDeclaration {
++  kind: 'facts'
++  id: 'settings.current_facts'
++  surface: SurfaceId
++  title: string
++  description: string
++  facts: readonly string[]
++  maxTopLevelFacts: number
++  rawContentIncluded: false
++  publish: (context: RuntimeContext) => JsonObject
++}
++
++export interface ReadToolDeclaration {
++  kind: 'read_tool'
++  id: Extract<CapabilityId, 'settings.get_local_status' | 'backup.get_status' | 'library.get_export_summary'>
++  surface: SurfaceId
++  title: string
++  description: string
++  params: ParamSchema
++  reads: readonly string[]
++  externalExposure: ExternalExposure
++  rawContentIncluded: false
++  read: (context: RuntimeContext, params: JsonObject) => ExecutionResult
++}
++
++export interface ActionDeclaration {
++  kind: 'action'
++  id: Extract<CapabilityId, 'settings.set_theme' | 'settings.set_daily_review' | 'backup.download_json'>
++  surface: SurfaceId
++  title: string
++  description: string
++  params: ParamSchema
++  reads: readonly string[]
++  writes: readonly string[]
++  risk: RiskClass
++  reversibility: Reversibility
++  effects: EffectFlags
++  confirmation: ConfirmationRule
++  externalExposure: ExternalExposure
++  guidance: string
++  examples: readonly { label: string; params: JsonObject }[]
++  preconditions: (context: RuntimeContext, params: JsonObject) => PreconditionResult
++  captureUndo?: (context: RuntimeContext, params: JsonObject) => JsonObject
++  execute: (context: RuntimeContext, params: JsonObject) => ExecutionResult | Promise<ExecutionResult>
++  undo?: (context: RuntimeContext, undo: JsonObject) => ExecutionResult | Promise<ExecutionResult>
++}
++
++export interface SurfaceDeclaration {
++  kind: 'surface'
++  id: SurfaceId
++  route: '/settings'
++  title: string
++  description: string
++  facts: readonly FactsDeclaration['id'][]
++  readTools: readonly ReadToolDeclaration['id'][]
++  actions: readonly ActionDeclaration['id'][]
++}
++
++export interface SteerableRegistry {
++  posture: PolicyPosture
++  surfaces: readonly SurfaceDeclaration[]
++  facts: readonly FactsDeclaration[]
++  readTools: readonly ReadToolDeclaration[]
++  actions: readonly ActionDeclaration[]
++}
