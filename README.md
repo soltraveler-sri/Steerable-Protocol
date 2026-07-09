@@ -28,6 +28,7 @@ These define the project's character; every document in this repo is bound by th
 | Read | To get |
 |---|---|
 | [`Steerable-Protocol-NorthStar.md`](./Steerable-Protocol-NorthStar.md) | The canonical design document. Everything traces back to it. |
+| [`docs/agent-responsive-design.md`](./docs/agent-responsive-design.md) | The category essay: why apps need to adapt to agents as a new class of users. |
 | [`docs/plan/ROADMAP.md`](./docs/plan/ROADMAP.md) | The Stage-1 plan: structural decisions, epics, sprints, gates. |
 | [`docs/plan/GROUNDING.md`](./docs/plan/GROUNDING.md) | The condensed mission, principles, and risks. |
 | [Issues](../../issues) / [Milestones](../../milestones) | PR-scoped work items, bundled into sprint milestones, labeled by epic (`epic:spec`, `epic:example`, `epic:kit`, `epic:evals`, `epic:meta`). |
