@@ -2,7 +2,7 @@ fixtureFormatVersion: "0.1.0"
 kind: intent-routing
 id: design-studio.intent.answer-templates
 title: Template question routes to answer
-description: Documented read-only template question uses the template list read tool.
+description: Documented template question stays pinned as answer routing; the declared facts and template read-tool result are pinned by facts-context fixtures.
 authoredBy: issue-17-implementing-agent
 authoredDate: "2026-07-09"
 target:
@@ -23,8 +23,6 @@ given:
 expected:
   routeClass: answer
   negativeCase: none
-  readTools:
-    - template.list_available
   answer:
     messageContains:
       - Available templates

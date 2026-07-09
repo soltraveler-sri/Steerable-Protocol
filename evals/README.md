@@ -15,6 +15,7 @@ evals/
   quarantined-fixtures.json
   schemas/
     common.schema.json
+    facts-context.schema.json
     intent-routing.schema.json
     policy-decisions.schema.json
     reversibility.schema.json
@@ -27,6 +28,8 @@ evals/
   reversibility/samples/*.yaml
   cross-surface/design-studio/*.yaml
   cross-surface/samples/*.yaml
+  facts-context/design-studio/*.yaml
+  facts-context/samples/*.yaml
 ```
 
 `samples/` remain illustrative format examples. Real executable suites live under a target-named directory such as `design-studio/`.
@@ -54,12 +57,21 @@ The runner binds to a target integration through a small adapter object:
 | `resolve(fixture)` | Execute a `policy-decisions` fixture through the target policy resolver and return per-step modes, chain boundary, denial, and rationale text. |
 | `execute(fixture)` | Execute a `cross-surface` fixture through the target execution engine and return sequence, failure, preserved undo prefix, and trace facts. |
 | `undo(fixture)` | Execute a `reversibility` fixture through target ledger/undo seams and return undo outcome, attempted order, per-step results, and disclosures. |
+| `context(fixture)` | Optional unless the suite contains `facts-context` fixtures. Publish a live surface's declared facts and run the fixture's declared typed read-tool calls. |
 
-Design Studio's adapter lives at `examples/design-studio/src/steerable/evalAdapter.ts`. A new integration should implement the same five fields without changing `evals/run-fixtures.mjs`.
+Design Studio's adapter lives at `examples/design-studio/src/steerable/evalAdapter.ts`. A new integration should implement the four core methods without changing `evals/run-fixtures.mjs`; implement `context` when it authors `facts-context` fixtures. This preserves compatibility for external adapters that only run the original four kinds.
 
 ## Running an External Target
 
 External integrations can keep their adapter and fixtures in their own repository. Point the canonical runner at an absolute adapter module path and the fixture suite directory:
+
+Before either validation or an external-target invocation, install the runner's own schema dependency in the Steerable checkout:
+
+```bash
+npm ci --prefix /path/to/Steerable-Protocol/evals
+```
+
+The runner intentionally resolves `ajv` from `evals/`, not from the external target. If that install is missing, it stops before adapter loading with this exact remedy; targets do not need a loader workaround or a duplicate `ajv` dependency.
 
 ```bash
 node /path/to/Steerable-Protocol/evals/run-fixtures.mjs \
@@ -85,6 +97,8 @@ export default {
   async resolve(fixture) {},
   async execute(fixture) {},
   async undo(fixture) {},
+  // Required only when this suite contains facts-context fixtures.
+  async context(fixture) {},
 };
 ```
 
@@ -101,7 +115,7 @@ Every fixture has these top-level fields:
 | Field | Meaning |
 |---|---|
 | `fixtureFormatVersion` | Fixture format version. Current value: `"0.1.0"`. |
-| `kind` | One of `intent-routing`, `policy-decisions`, `reversibility`, `cross-surface`. |
+| `kind` | One of `intent-routing`, `policy-decisions`, `reversibility`, `cross-surface`, `facts-context`. |
 | `id` | Stable fixture ID, unique within the suite. |
 | `title`, `description` | Human-readable fixture purpose. |
 | `authoredBy`, `authoredDate` | Provenance. Dates use `YYYY-MM-DD`. |
@@ -186,6 +200,14 @@ Use the kind-specific detail field to make the negative expectation first-class:
 | `cross-surface` | `expected.failure` plus failure sequence events |
 
 ## Fixture Kinds
+
+### Facts Context
+
+Facts-context fixtures assert the first two context-ladder rungs directly: a live surface's declared fact publisher and its typed read tools. They assert `SA-CTX-020` through `SA-CTX-045` without routing an utterance or invoking action policy/execution machinery.
+
+`given` contains the live `surfaceId` and optional `readToolCalls`. Each call names a declared read-tool ID plus plain JSON `params`. `expected.facts` names each facts declaration expected on that live surface; its `values` use the existing `allowExtra`/`fields` matcher envelope. `expected.readTools` pins the result of each requested call using that same envelope.
+
+This is deliberately a declaration-and-query fixture, not a second router or a matcher expansion. It must obtain facts from the declaration's publisher and read-tool results from the declared typed `query` after registry availability, precondition, and parameter validation. Keep utterance-to-answer behavior in `intent-routing`; when an answer fixture also happened to pin a read tool, move that read-tool assertion here and leave the routing assertion focused on route class and answer text.
 
 ### Intent Routing
 
@@ -281,7 +303,7 @@ The destination-readiness wait must be finite. The framework default is 5000 ms 
 
 ## Worked Authoring Walkthrough
 
-1. Pick the kind. If the behavior is utterance classification, use `intent-routing`; if it is posture and grants, use `policy-decisions`; if it is undo, use `reversibility`; if it crosses declared surfaces, use `cross-surface`.
+1. Pick the kind. If the behavior is declared facts or typed read-tool output, use `facts-context`; if it is utterance classification, use `intent-routing`; if it is posture and grants, use `policy-decisions`; if it is undo, use `reversibility`; if it crosses declared surfaces, use `cross-surface`.
 2. Bind the fixture to a registry. Fill `target.integrationId`, `target.registry.id`, `target.registry.version`, and `target.registry.ref`. Do not author a suite against an unspecified or floating registry.
 3. Cite the contract. Add the `SA-*` IDs that make this fixture meaningful. Prefer the narrowest IDs, such as `SA-EXEC-025` for single action routing or `SA-LED-114` for partial undo disclosure.
 4. Write `given` from declared state. Use plain JSON facts, session context, grants, runtime signals, or ledger state. If you need a value that cannot be represented as JSON, store a stable reference string instead.
@@ -290,7 +312,7 @@ The destination-readiness wait must be finite. The framework default is 5000 ms 
 7. Validate locally:
 
 ```bash
-npm --prefix evals install
+npm ci --prefix evals
 npm --prefix evals run validate
 ```
 

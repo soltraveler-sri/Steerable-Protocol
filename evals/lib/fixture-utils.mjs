@@ -1,12 +1,13 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
-import Ajv from "ajv";
 
 export const suiteKinds = [
   "intent-routing",
   "policy-decisions",
   "reversibility",
   "cross-surface",
+  "facts-context",
 ];
 
 export const schemaFiles = [
@@ -15,6 +16,7 @@ export const schemaFiles = [
   "policy-decisions.schema.json",
   "reversibility.schema.json",
   "cross-surface.schema.json",
+  "facts-context.schema.json",
 ];
 
 export const schemaByKind = new Map([
@@ -22,9 +24,11 @@ export const schemaByKind = new Map([
   ["policy-decisions", "policy-decisions.schema.json"],
   ["reversibility", "reversibility.schema.json"],
   ["cross-surface", "cross-surface.schema.json"],
+  ["facts-context", "facts-context.schema.json"],
 ]);
 
 export function createValidator(evalsDir) {
+  const Ajv = loadAjv();
   const ajv = new Ajv({ allErrors: true, strict: false });
   const schemasDir = path.join(evalsDir, "schemas");
 
@@ -35,6 +39,21 @@ export function createValidator(evalsDir) {
   }
 
   return ajv;
+}
+
+function loadAjv() {
+  try {
+    const require = createRequire(import.meta.url);
+    const module = require("ajv");
+
+    return module.default ?? module;
+  } catch (error) {
+    const detail = error instanceof Error ? ` (${error.code ?? error.name})` : "";
+
+    throw new Error(
+      `Missing evals dependency "ajv"${detail}. Run \`npm ci --prefix evals\` from the Steerable checkout before validating or running fixtures.`,
+    );
+  }
 }
 
 export function findYamlFiles(dir) {

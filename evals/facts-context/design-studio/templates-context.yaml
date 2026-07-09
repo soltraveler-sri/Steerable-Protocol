@@ -1,0 +1,49 @@
+fixtureFormatVersion: "0.1.0"
+kind: facts-context
+id: design-studio.context.templates-facts-and-read-tool
+title: Templates surface publishes bounded context and lists templates
+description: Pins the Templates facts declaration and its declared template lookup without routing an utterance.
+authoredBy: issue-60-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio facts-context fixture.
+requirementRefs:
+  - SA-DECL-107
+  - SA-CTX-020
+  - SA-CTX-040
+  - SA-CTX-042
+given:
+  surfaceId: templates
+  readToolCalls:
+    - id: template.list_available
+      params: {}
+expected:
+  facts:
+    - id: templates.current_facts
+      values:
+        allowExtra: true
+        fields:
+          ui.route:
+            kind: exact
+            value: "/templates"
+          template.count:
+            kind: exact
+            value: 3
+          quota.exports_remaining:
+            kind: exact
+            value: 3
+  readTools:
+    - id: template.list_available
+      result:
+        allowExtra: true
+        fields:
+          activeTemplateId:
+            kind: exact
+            value: botanical-waitlist

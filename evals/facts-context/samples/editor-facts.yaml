@@ -1,0 +1,33 @@
+fixtureFormatVersion: "0.1.0"
+kind: facts-context
+id: sample.context.editor-facts
+title: Editor facts publish bounded current state
+description: Sample fixture for asserting selected values from one declared facts publisher.
+authoredBy: issue-60-implementing-agent
+authoredDate: "2026-07-09"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.sample-registry
+    version: sample-v0
+    ref: examples/design-studio
+sample:
+  isSample: true
+  note: Uses Design Studio-oriented IDs only; these IDs are not part of the fixture format.
+requirementRefs:
+  - SA-CTX-020
+  - SA-CTX-024
+given:
+  surfaceId: editor
+expected:
+  facts:
+    - id: editor.current_facts
+      values:
+        allowExtra: true
+        fields:
+          ui.route:
+            kind: exact
+            value: "/"
+          quota.exports_remaining:
+            kind: exact
+            value: 3

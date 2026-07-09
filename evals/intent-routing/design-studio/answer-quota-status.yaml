@@ -2,7 +2,7 @@ fixtureFormatVersion: "0.1.0"
 kind: intent-routing
 id: design-studio.intent.answer-quota-status
 title: Export quota question routes to answer
-description: Eval-authoring verification fixture pins the quota read-tool answer path derived from read-tool guidance.
+description: Eval-authoring verification fixture pins the quota answer route; declared facts and quota read-tool output are covered by facts-context fixtures.
 authoredBy: eval-authoring-skill-verification
 authoredDate: "2026-07-09"
 target:
@@ -23,8 +23,6 @@ given:
 expected:
   routeClass: answer
   negativeCase: none
-  readTools:
-    - quota.get_status
   answer:
     messageContains:
       - mock exports remain

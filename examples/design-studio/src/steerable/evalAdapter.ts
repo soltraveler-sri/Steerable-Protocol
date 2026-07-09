@@ -119,6 +119,14 @@ interface CrossSurfaceGiven extends JsonObject {
   policyContext?: JsonObject;
 }
 
+interface FactsContextGiven extends JsonObject {
+  surfaceId: DesignStudioSurfaceId;
+  readToolCalls?: {
+    id: string;
+    params: JsonObject;
+  }[];
+}
+
 interface HarnessOptions {
   posture?: PosturePreset;
   liveSurfaces?: DesignStudioSurfaceId[];
@@ -153,6 +161,7 @@ export function createDesignStudioEvalAdapter() {
     resolve,
     execute,
     undo,
+    context,
   };
 }
 
@@ -329,6 +338,40 @@ async function execute(fixture: EvalFixture) {
     prefixUndo,
     trace: harness.ledger.extractEvalTrace(),
   };
+}
+
+async function context(fixture: EvalFixture) {
+  const given = fixture.given as FactsContextGiven;
+  const harness = createHarness({ liveSurfaces: [given.surfaceId] });
+  const facts = await Promise.all(
+    harness.registry.getLiveFacts(given.surfaceId).map(async (declaration) => ({
+      id: declaration.id,
+      values: await declaration.publish(),
+    })),
+  );
+  const liveReadTools = new Map(
+    harness.registry.getLiveReadTools(given.surfaceId).map((readTool) => [readTool.id, readTool]),
+  );
+  const readTools = await Promise.all(
+    (given.readToolCalls ?? []).map(async (call) => {
+      const readTool = liveReadTools.get(call.id);
+
+      if (!readTool) {
+        throw new Error(`Read tool "${call.id}" is not live on surface "${given.surfaceId}".`);
+      }
+
+      const params = readTool.params.parse(call.params);
+      const result = await readTool.query(params, {
+        registry: harness.registry,
+        surfaceId: given.surfaceId,
+        now: () => fixedNow,
+      });
+
+      return { id: readTool.id, result };
+    }),
+  );
+
+  return { facts, readTools };
 }
 
 async function undo(fixture: EvalFixture) {
