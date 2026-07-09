@@ -20,20 +20,45 @@ export interface ActionEffects {
   sensitive: boolean;
 }
 
+/** A trusted, portable snapshot of the state keys an action may restore. */
+export interface StateSnapshot {
+  capturedAt: string;
+  keys: StateKey[];
+  values: Record<StateKey, unknown>;
+}
+
+/**
+ * Application-owned state capture and restoration seam used for snapshot undo.
+ * Core only asks for declared write keys; adapters decide how state is stored.
+ */
+export interface StateSnapshotAdapter {
+  capture(keys: StateKey[]): MaybePromise<StateSnapshot>;
+  restore(snapshot: StateSnapshot): MaybePromise<void>;
+}
+
 export interface CapabilityExample<Params = unknown> {
   user: string;
   params: Params;
 }
 
 export interface ActionExecutionContext {
+  registry: CapabilityRegistry;
   surfaceId: SurfaceId;
+  snapshotStore?: StateSnapshotAdapter;
   signal?: AbortSignal;
+  now: () => Date;
 }
 
 export interface ActionUndoInput<Params = unknown, Result = unknown> {
   params: Params;
   result?: Result;
-  snapshot?: unknown;
+  snapshot?: StateSnapshot;
+}
+
+/** Closed escape hatch for a stable product command that predates verb_noun IDs. */
+export interface EstablishedProductCommandIdException {
+  kind: "established_product_command";
+  productCommand: string;
 }
 
 export interface ActionDeclaration<Params = unknown, Result = unknown> {
@@ -52,6 +77,7 @@ export interface ActionDeclaration<Params = unknown, Result = unknown> {
   execute(params: Params, context: ActionExecutionContext): MaybePromise<Result>;
   undo?(input: ActionUndoInput<Params, Result>, context: ActionExecutionContext): MaybePromise<unknown>;
   observe?(context: ActionExecutionContext): MaybePromise<unknown>;
+  idException?: EstablishedProductCommandIdException;
   guidance: string;
   examples: CapabilityExample<Params>[];
 }
@@ -134,7 +160,7 @@ export class RegistryCompileError extends Error {
 }
 
 const CAPABILITY_ID = /^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/;
-const SURFACE_ID = /^[a-z0-9][a-z0-9_-]*(?:\.[a-z0-9][a-z0-9_-]*)*$/;
+const SURFACE_ID = /^[a-z0-9][a-z0-9_-]*$/;
 const STATE_KEY = /^[a-z0-9_]+(?:\.[a-z0-9_]+)+$/;
 
 export function defineAction<Params, Result = unknown>(
@@ -191,6 +217,7 @@ export class CapabilityRegistry {
   private readonly surfaces = new Map<SurfaceId, SurfaceDeclaration>();
   private readonly liveSurfaces = new Set<SurfaceId>();
   private readonly satisfiedPredicates = new Set<string>();
+  private readonly listeners = new Set<() => void>();
 
   constructor(declarations: RegistryDeclarations = {}) {
     for (const action of declarations.actions ?? []) this.compileAction(action);
@@ -251,10 +278,12 @@ export class CapabilityRegistry {
       throw new RegistryCompileError("undeclared_surface", `Cannot register undeclared surface \"${id}\".`);
     }
     this.liveSurfaces.add(id);
+    this.emit();
   }
 
   deregisterSurface(id: SurfaceId): void {
     this.liveSurfaces.delete(id);
+    this.emit();
   }
 
   isSurfaceLive(id: SurfaceId): boolean {
@@ -264,6 +293,13 @@ export class CapabilityRegistry {
   setPrecondition(token: string, satisfied: boolean): void {
     if (satisfied) this.satisfiedPredicates.add(token);
     else this.satisfiedPredicates.delete(token);
+    this.emit();
+  }
+
+  /** Subscribe to live-surface or predicate changes for readiness adapters. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 
   isPreconditionSatisfied(token: string): boolean {
@@ -351,6 +387,7 @@ export class CapabilityRegistry {
     if (!declaration.reversibility || !isReversibility(declaration.reversibility.kind)) this.fail("invalid_reversibility", `Invalid reversibility for action \"${declaration.id}\".`);
     if (!declaration.effects || typeof declaration.effects.external !== "boolean" || typeof declaration.effects.sensitive !== "boolean" || !isCost(declaration.effects.cost)) this.fail("invalid_effects", `Invalid effects for action \"${declaration.id}\".`);
     if (!isConfirmation(declaration.confirmation)) this.fail("invalid_confirmation", `Invalid confirmation for action \"${declaration.id}\".`);
+    this.validateActionIdException(declaration);
     this.validateExternalExposure(declaration.externalExposure, declaration.id);
     if (typeof declaration.execute !== "function") this.fail("missing_execute", `Action \"${declaration.id}\" must declare an executor.`);
     if (declaration.reversibility.kind === "undoable" && typeof declaration.undo !== "function") this.fail("missing_undo", `Undoable action \"${declaration.id}\" must declare undo.`);
@@ -411,6 +448,20 @@ export class CapabilityRegistry {
     if (!CAPABILITY_ID.test(id)) this.fail("invalid_capability_id", `Invalid capability id \"${id}\".`);
   }
 
+  private validateActionIdException(declaration: AnyActionDeclaration): void {
+    const finalSegment = declaration.id.split(".").at(-1) ?? "";
+    const hasVerbNounFinalSegment = /^[a-z0-9]+_[a-z0-9_]+$/.test(finalSegment);
+    const exception = declaration.idException;
+    if (hasVerbNounFinalSegment) {
+      if (exception !== undefined) this.fail("unnecessary_id_exception", `Action \"${declaration.id}\" must not declare idException for a verb_noun ID.`);
+      return;
+    }
+    if (!exception || typeof exception !== "object" || Array.isArray(exception) ||
+      Object.keys(exception).length !== 2 || exception.kind !== "established_product_command" || !nonEmpty(exception.productCommand)) {
+      this.fail("invalid_id_exception", `Action \"${declaration.id}\" must declare the closed established-product-command idException.`);
+    }
+  }
+
   private ensureSchema(schema: unknown, id: string): void {
     if (!schema || typeof (schema as StrictSchema<unknown>).parse !== "function") this.fail("invalid_schema", `Capability \"${id}\" must declare a strict parse schema.`);
   }
@@ -425,6 +476,10 @@ export class CapabilityRegistry {
 
   private fail(code: string, message: string): never {
     throw new RegistryCompileError(code, message);
+  }
+
+  private emit(): void {
+    this.listeners.forEach((listener) => listener());
   }
 }
 
