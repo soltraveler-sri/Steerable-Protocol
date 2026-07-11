@@ -17,7 +17,7 @@ Read only what the phase needs, but preserve this authority order:
 2. Process authority: `docs/guides/retrofit-existing-app.md` and `docs/guides/coding-agent-handoff.md`.
 3. Spec orientation: `docs/spec/steerable-apps.md`, then `docs/spec/capability-declarations.md`, `docs/spec/autonomy-policy.md`, and `docs/spec/conformance-checklist.md`.
 4. Guardrails before plan/posture choices: `docs/guides/designing-agent-responsive-features.md` and `docs/guides/policy-templates.md`.
-5. Proto-runtime notice before example code: `examples/design-studio/src/steerable/README.md`.
+5. Example-integration notice before example code: `examples/design-studio/src/steerable/README.md` (the example consumes `@steerable/core`/`@steerable/react`; its remaining local files are app-owned declarations and wiring, not a copyable runtime).
 6. Verification sub-procedures only when Phase 6 starts: `skills/integration-audit/SKILL.md` and `skills/eval-authoring/SKILL.md`.
 
 For detailed execution, context, ledger, or bridge questions, follow the `SA-CONF-*` row to the cited spec file instead of restating the rule locally.
@@ -67,11 +67,11 @@ Before editing code, return the review packet from `references/review-packet-tem
 
 If the user says "just do it" before this packet exists, still produce the packet and stop. An unambiguous affirmative from the human on the packet as a whole is sufficient approval. Partial approval authorizes only the approved subset; execute that subset and return the rest to Phase 4. Silence, time passing, or ambiguous responses are not approval.
 
-Abort if the plan cannot satisfy the hard limits, cannot make mutation executor-only without deep refactoring, cannot name an executable undo/snapshot or honest no-undo path, or depends on copying the Design Studio proto-runtime.
+Abort if the plan cannot satisfy the hard limits, cannot make mutation executor-only without deep refactoring, cannot name an executable undo/snapshot or honest no-undo path, or depends on copying Design Studio example internals instead of using the packages or the spec.
 
 ### 5. Execute Approved First Integration
 
-Implement only the approved slice in the target's own patterns. Hand-roll the minimal contracts needed for the approved scope: one registry source, strict params, bounded facts/read tools, surface liveness, policy before each invocation, trusted executors, visible activity, ledger records, and undo/no-undo records. Use `docs/guides/designing-agent-responsive-features.md` for greenfield feature shape when the target needs a small missing seam, and `docs/guides/policy-templates.md` for posture selection.
+Implement only the approved slice in the target's own patterns. Runtime choice, in preference order: (a) consume the in-repo packages `@steerable/core` and `@steerable/react` (`packages/` in this repo — working and tested but not yet published to npm, so vendor the two package directories into the target or reference them via a git/workspace mechanism the target already uses); (b) hand-roll the minimal contracts per the spec when vendoring TypeScript packages does not fit the target's stack. Either way the contracts are the same: one registry source, strict params, bounded facts/read tools, surface liveness, policy before each invocation, trusted executors, visible activity, ledger records, and undo/no-undo records. Use `docs/guides/designing-agent-responsive-features.md` for greenfield feature shape when the target needs a small missing seam, and `docs/guides/policy-templates.md` for posture selection.
 
 Run the policy-template contrast check before coding posture behavior: compare the chosen action set against `docs/guides/policy-templates.md#same-registry-three-products` and confirm declarations stay stable while only policy inputs change. If the implementation starts to gate clean safe reversible work by default, stop and redesign the action boundary, recovery, or posture choice.
 
