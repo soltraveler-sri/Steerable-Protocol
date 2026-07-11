@@ -1,7 +1,27 @@
 {
   "name": "@steerable/core",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Framework-agnostic core of the Steerable protocol: capability registry, policy engine, execution, ledger, and undo.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soltraveler-sri/Steerable-Protocol.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/soltraveler-sri/Steerable-Protocol#readme",
+  "bugs": {
+    "url": "https://github.com/soltraveler-sri/Steerable-Protocol/issues"
+  },
+  "keywords": [
+    "steerable",
+    "agent-responsive-design",
+    "ai-agents",
+    "capability-registry",
+    "policy-engine",
+    "undo",
+    "tool-calling"
+  ],
+  "sideEffects": false,
   "type": "module",
   "exports": {
     ".": {
@@ -13,8 +33,12 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run build && vitest run"
   }
 }
