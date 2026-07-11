@@ -1,7 +1,27 @@
 {
   "name": "@steerable/react",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Thin React binding for @steerable/core: provider, hooks, and surface registration.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/soltraveler-sri/Steerable-Protocol.git",
+    "directory": "packages/react"
+  },
+  "homepage": "https://github.com/soltraveler-sri/Steerable-Protocol#readme",
+  "bugs": {
+    "url": "https://github.com/soltraveler-sri/Steerable-Protocol/issues"
+  },
+  "keywords": [
+    "steerable",
+    "agent-responsive-design",
+    "ai-agents",
+    "capability-registry",
+    "policy-engine",
+    "undo",
+    "tool-calling"
+  ],
+  "sideEffects": false,
   "type": "module",
   "exports": {
     ".": {
@@ -13,12 +33,16 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b --force",
-    "test": "npm run build && vitest run"
+    "test": "npm run build && vitest run",
+    "prepublishOnly": "npm test"
   },
   "dependencies": {
-    "@steerable/core": "^0.0.0"
+    "@steerable/core": "^0.1.0"
   },
   "peerDependencies": {
     "react": ">=18"

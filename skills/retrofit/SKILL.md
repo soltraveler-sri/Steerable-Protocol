@@ -1,13 +1,13 @@
 ---
 name: retrofit
-description: Retrofit an existing product app with a minimal Steerable integration. Use when Codex is pointed at this Steerable repo plus a target app and asked to inventory fit, produce the mandatory stop-before-code plan mapped to SA-CONF, execute the approved first slice in the target app's own idiom, and self-verify with integration-audit plus eval-authoring.
+description: Retrofit an existing product app with a Steerable integration. Use when an agent is pointed at this Steerable repo plus a target app and asked to inventory fit, produce the stop-before-code plan mapped to SA-CONF, execute the approved slice in the target app's own idiom, and self-verify with integration-audit plus eval-authoring. Defaults to a review-gated minimal first slice; supports an explicitly authorized full-build mode for pre-production targets.
 ---
 
 # Retrofit
 
 Use this skill as the Stage 1 front door for an existing app. It distills `docs/guides/retrofit-existing-app.md` into an executable agent workflow. If this skill and that guide diverge, the guide is authoritative; fix the skill, not the guide.
 
-This repo does not ship an installable Stage 1 SDK or supported runtime. Implement the minimal Steerable contracts by hand in the target app's own idiom: declarations/registry, policy check before every action execution, trusted executor discipline, visible activity, session-level ledger, and honest undo/no-undo. Read `examples/design-studio/src/steerable/README.md` before inspecting the example runtime; the example is disposable and must not be copied into another app.
+Runtime availability: `@steerable/core` and `@steerable/react` live in this repo's `packages/` — working and tested, not yet published to npm. Prefer consuming them (vendor the package directories, or npm once published); hand-roll the minimal contracts per spec only when that does not fit the target's stack. Either way the contracts are: declarations/registry, policy check before every action execution, trusted executor discipline, visible activity, session-level ledger, and honest undo/no-undo. Read `examples/design-studio/src/steerable/README.md` before inspecting example code; the example's local files are app-owned wiring, not a copyable runtime.
 
 ## Load Order
 
@@ -34,6 +34,18 @@ Keep the first integration demonstrable, not complete:
 - No more than eight new action declarations before returning for review. If an existing Steerable-like layer already has more, audit or repair a representative slice capped at twelve actions and file the rest.
 
 Do not implement door two, a provider adapter, a generic SDK extraction, a tool-loop workflow engine, durable audit storage beyond the approved scope, DOM/vision-first context, or a platform rewrite in the first slice. Do not globally add review ceremony to clean safe reversible actions; choose posture from policy evidence.
+
+## Full-Build Mode (Pre-Production Targets)
+
+The hard limits and the Phase-4 stop exist to keep changes to a **live product** reviewable. For a **pre-production target** — unshipped, low iteration cost — the human may lift them by stating both facts explicitly in the work order (e.g. "This app is pre-production and unshipped. Full-build mode: authorized — proceed through implementation without stopping for interim review.").
+
+When (and only when) that authorization is present:
+
+- The first-slice caps above are lifted. Scope becomes judgment-driven fit coverage: implement the aspects of the protocol that fit this product well, and exclude poor fits with stated reasons in the design document. Coverage is an outcome of fit judgment, never a quota.
+- The Phase-4 stop converts from a gate into a record: still produce the full design document **before** implementing (it is the plan of record and the reviewer's audit trail), but the work-order authorization stands as approval — do not wait.
+- Everything else is unchanged and never waivable: the fit assessment may still conclude `does not fit` or `partial fit`; every conformance guardrail holds (mutation only via trusted executors, one declaration source of truth, no review ceremony on clean safe reversible actions, executable undo or honest no-undo); Phase-6 self-verification (integration-audit + eval-authoring) remains mandatory before declaring done; all abort criteria remain in force.
+
+Default remains the review-gated flow. A deployed or user-facing product should not use full-build mode; the iterative review is what protects it.
 
 ## Six Phases
 
