@@ -1,3 +1,8 @@
+/**
+ * Registry contract tests for the reference capability declarations.
+ * They pin public IDs, schemas, policy metadata, facts, surfaces, and store-backed behavior.
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   applyDesignStoreEvent,
@@ -28,22 +33,18 @@ function createReducerBackedHost(): DesignStudioCapabilityHost {
     state = applyDesignStoreEvent(state, event);
   };
   const setters: DesignSetters = {
-    setPaletteToken: (token, value) =>
-      dispatch({ type: "paletteTokenSet", token, value }),
-    applyPalettePreset: (presetId) =>
-      dispatch({ type: "palettePresetApplied", presetId }),
+    setPaletteToken: (token, value) => dispatch({ type: "paletteTokenSet", token, value }),
+    applyPalettePreset: (presetId) => dispatch({ type: "palettePresetApplied", presetId }),
     setFontPairing: (value) => dispatch({ type: "fontPairingSet", value }),
     setTypeScale: (value) => dispatch({ type: "typeScaleSet", value }),
     setHeroLayout: (value) => dispatch({ type: "heroLayoutSet", value }),
     toggleSectionVisibility: (sectionId) =>
       dispatch({ type: "sectionVisibilityToggled", sectionId }),
-    moveSection: (sectionId, direction) =>
-      dispatch({ type: "sectionMoved", sectionId, direction }),
+    moveSection: (sectionId, direction) => dispatch({ type: "sectionMoved", sectionId, direction }),
     updateSectionText: (sectionId, field, value) =>
       dispatch({ type: "sectionTextUpdated", sectionId, field, value }),
     applyTemplate: (templateId) => dispatch({ type: "templateApplied", templateId }),
-    updateProjectMeta: (field, value) =>
-      dispatch({ type: "projectMetaUpdated", field, value }),
+    updateProjectMeta: (field, value) => dispatch({ type: "projectMetaUpdated", field, value }),
     copyShareLink: async () => {
       dispatch({
         type: "shareMessageSet",
@@ -80,10 +81,7 @@ describe("Design Studio capability declarations", () => {
     const registry = createDesignStudioRegistry(createReducerBackedHost());
     const actions = registry.getAllActions();
     const riskCounts = countBy(actions, (action) => action.risk);
-    const reversibilityCounts = countBy(
-      actions,
-      (action) => action.reversibility.kind,
-    );
+    const reversibilityCounts = countBy(actions, (action) => action.reversibility.kind);
 
     expect(actions).toHaveLength(15);
     expect(registry.getAllReadTools()).toHaveLength(3);
@@ -185,9 +183,7 @@ describe("Design Studio capability declarations", () => {
 
     for (const facts of registry.getAllFacts()) {
       expect(facts.facts.length, facts.id).toBeLessThanOrEqual(12);
-      expect(Object.keys(await facts.publish())).toEqual(
-        facts.facts.map((entry) => entry.key),
-      );
+      expect(Object.keys(await facts.publish())).toEqual(facts.facts.map((entry) => entry.key));
     }
   });
 
@@ -255,24 +251,17 @@ describe("Design Studio capability declarations", () => {
     host.setters.exportProject();
 
     await expect(
-      Promise.resolve(
-      designTool.query({}, { surfaceId: designStudioSurfaceIds.editor }),
-      ),
+      Promise.resolve(designTool.query({}, { surfaceId: designStudioSurfaceIds.editor })),
     ).resolves.toEqual(
       expect.objectContaining({
         activeTemplateId: "botanical-waitlist",
         project: expect.objectContaining({ tone: "premium" as ProjectMeta["tone"] }),
-        sections: expect.arrayContaining([
-          expect.objectContaining({ id: "hero", visible: true }),
-        ]),
+        sections: expect.arrayContaining([expect.objectContaining({ id: "hero", visible: true })]),
       }),
     );
     await expect(
       Promise.resolve(
-      templatesTool.query(
-        { tone: "premium" },
-        { surfaceId: designStudioSurfaceIds.templates },
-      ),
+        templatesTool.query({ tone: "premium" }, { surfaceId: designStudioSurfaceIds.templates }),
       ),
     ).resolves.toEqual({
       activeTemplateId: "botanical-waitlist",
@@ -284,9 +273,7 @@ describe("Design Studio capability declarations", () => {
       ],
     });
     await expect(
-      Promise.resolve(
-      quotaTool.query({}, { surfaceId: designStudioSurfaceIds.settings }),
-      ),
+      Promise.resolve(quotaTool.query({}, { surfaceId: designStudioSurfaceIds.settings })),
     ).resolves.toEqual(
       expect.objectContaining({
         limit: 3,
@@ -301,16 +288,18 @@ describe("Design Studio capability declarations", () => {
     const adapter = createEcosystemAdapter(registry, "creative-tool");
 
     expect(Object.keys(adapter.toolSchemas).sort()).toEqual(
-      registry.getAllActions().map((action) => action.id).sort(),
+      registry
+        .getAllActions()
+        .map((action) => action.id)
+        .sort(),
     );
-    expect(Object.values(adapter.toolSchemas).every((tool) => tool.inputSchema !== undefined)).toBe(true);
+    expect(Object.values(adapter.toolSchemas).every((tool) => tool.inputSchema !== undefined)).toBe(
+      true,
+    );
   });
 });
 
-function countBy<T>(
-  values: T[],
-  getKey: (value: T) => string,
-): Record<string, number> {
+function countBy<T>(values: T[], getKey: (value: T) => string): Record<string, number> {
   return values.reduce<Record<string, number>>((counts, value) => {
     const key = getKey(value);
 
@@ -319,10 +308,7 @@ function countBy<T>(
   }, {});
 }
 
-function requireReadTool(
-  registry: CapabilityRegistry,
-  id: string,
-): CompiledReadToolDeclaration {
+function requireReadTool(registry: CapabilityRegistry, id: string): CompiledReadToolDeclaration {
   const readTool = registry.getReadTool(id);
 
   if (!readTool) {

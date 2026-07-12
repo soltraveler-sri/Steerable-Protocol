@@ -1,11 +1,5 @@
 export type PaletteToken =
-  | "background"
-  | "surface"
-  | "text"
-  | "muted"
-  | "accent"
-  | "accentContrast"
-  | "border";
+  "background" | "surface" | "text" | "muted" | "accent" | "accentContrast" | "border";
 
 export type Palette = Record<PaletteToken, string>;
 

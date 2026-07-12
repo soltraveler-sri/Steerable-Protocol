@@ -110,7 +110,13 @@ function PreviewSection({ section }: { section: LandingSection }) {
   return null;
 }
 
-export function LandingPreview({ state, compact = false }: { state: DesignState; compact?: boolean }) {
+export function LandingPreview({
+  state,
+  compact = false,
+}: {
+  state: DesignState;
+  compact?: boolean;
+}) {
   const sections = state.sections.filter((section) => section.visible);
   const pairing = pairingStyles[state.typography.fontPairing];
   const scale = scaleStyles[state.typography.scale];

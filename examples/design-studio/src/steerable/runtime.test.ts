@@ -1,3 +1,8 @@
+/**
+ * Runtime contract tests for execution, policy, ledger, undo, and cross-surface behavior.
+ * These tests pin the protocol engine seams exercised by the reference integration.
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SURFACE_READINESS_TIMEOUT_MS,
@@ -16,6 +21,7 @@ import {
   type SteeringInvocationRecord,
 } from "@steerable/core";
 import { createManualApprovalController } from "./testUtils";
+import { undoToastLabelForRecord } from "./trail";
 
 const hexSchema = createStrictObjectSchema<{ hex: string }>(["hex"], (input) => {
   if (typeof input.hex !== "string") {
@@ -310,9 +316,7 @@ describe("inline steerable proto-runtime", () => {
     });
     const pending = await approval.waitForPendingRequest();
 
-    expect(pending.heldSteps.map((step) => step.actionId)).toEqual([
-      "project.export_quota",
-    ]);
+    expect(pending.heldSteps.map((step) => step.actionId)).toEqual(["project.export_quota"]);
     expect(approvingRun.getRecord().steps.map((step) => step.status)).toEqual([
       "succeeded",
       "held",
@@ -413,14 +417,14 @@ describe("inline steerable proto-runtime", () => {
     expect(timeoutResult.status).toBe("failed");
     expect(timeoutResult.failure?.code).toBe("surface_readiness_timeout");
     expectMinimalLedgerRecord(timeoutResult.record);
-    expect(timeoutResult.record.steps.map((step) => step.status)).toEqual([
-      "succeeded",
-      "failed",
-    ]);
+    expect(timeoutResult.record.steps.map((step) => step.status)).toEqual(["succeeded", "failed"]);
     expect(timeoutResult.record.disclosures).toEqual(
       expect.arrayContaining([expect.objectContaining({ kind: "cross_surface_failure" })]),
     );
     expect("handleId" in timeoutResult.record.steps[0].undo).toBe(true);
+    expect(undoToastLabelForRecord(timeoutResult.record)).toBe(
+      "Chain failed. Completed steps can be undone.",
+    );
     expect(DEFAULT_SURFACE_READINESS_TIMEOUT_MS).toBe(5000);
   });
 
@@ -576,9 +580,7 @@ function expectMinimalLedgerRecord(record: SteeringInvocationRecord) {
   expect(record.surfaceRef).toEqual(expect.any(String));
   expect(record.intent.text ?? record.intent.redactedText ?? record.intent.ref).toBeTruthy();
   expect(record.initiator.kind).toMatch(/user|system|external_agent/);
-  expect(record.approval.status).toMatch(
-    /not-required|pending|approved|declined|expired|canceled/,
-  );
+  expect(record.approval.status).toMatch(/not-required|pending|approved|declined|expired|canceled/);
   expect(record.policyDecisions.length).toBeGreaterThan(0);
 
   record.policyDecisions.forEach((decision) => {

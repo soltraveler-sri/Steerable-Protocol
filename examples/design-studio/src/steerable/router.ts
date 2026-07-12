@@ -1,9 +1,11 @@
+/**
+ * Example intent router that maps a small scripted language onto registry declarations.
+ * Production integrations can replace this adapter while keeping declarations and execution stable.
+ */
+
 import { palettePresets } from "../data/designData";
 import type { DesignState, FontPairing, PaletteToken } from "../types";
-import {
-  designStudioSurfaceIds,
-  type DesignStudioSurfaceId,
-} from "./designStudioCapabilities";
+import { designStudioSurfaceIds, type DesignStudioSurfaceId } from "./designStudioCapabilities";
 import type { CapabilityRegistry, SurfaceId } from "@steerable/core";
 
 export type IntentRouteClass =
@@ -58,10 +60,7 @@ export interface RefusalIntentRoute extends BaseRoute {
 }
 
 export type IntentRoute =
-  | ActionIntentRoute
-  | AnswerIntentRoute
-  | ClarificationIntentRoute
-  | RefusalIntentRoute;
+  ActionIntentRoute | AnswerIntentRoute | ClarificationIntentRoute | RefusalIntentRoute;
 
 export interface IntentRouterProvider {
   classify: (request: IntentRouterRequest) => IntentRoute | Promise<IntentRoute>;
@@ -398,9 +397,7 @@ function classifyActionSegment(
     }
 
     const targetSurfaceId =
-      pattern.targetSurfaceId === "source"
-        ? request.sourceSurfaceId
-        : pattern.targetSurfaceId;
+      pattern.targetSurfaceId === "source" ? request.sourceSurfaceId : pattern.targetSurfaceId;
 
     if (!request.registry.isCapabilityOnSurface(pattern.actionId, targetSurfaceId)) {
       return refusalRoute(
@@ -491,10 +488,7 @@ function extractFontPairing(text: string): ExtractorResult {
   };
 }
 
-function extractSectionVisibility(
-  text: string,
-  request: IntentRouterRequest,
-): ExtractorResult {
+function extractSectionVisibility(text: string, request: IntentRouterRequest): ExtractorResult {
   const normalized = normalizeText(text);
   const section = findSection(request.state, normalized);
   const hasHide = includesTerm(normalized, "hide") || includesTerm(normalized, "remove");
@@ -540,10 +534,7 @@ function extractSectionMove(text: string, request: IntentRouterRequest): Extract
     return { status: "no-match" };
   }
 
-  const missing = [
-    ...(section ? [] : ["section"]),
-    ...(direction ? [] : ["move direction"]),
-  ];
+  const missing = [...(section ? [] : ["section"]), ...(direction ? [] : ["move direction"])];
 
   if (missing.length > 0) {
     return { status: "missing", missing };
@@ -585,10 +576,7 @@ function extractPosture(text: string): ExtractorResult {
     };
   }
 
-  if (
-    includesTerm(normalized, "creative") ||
-    includesTerm(normalized, "creative tool")
-  ) {
+  if (includesTerm(normalized, "creative") || includesTerm(normalized, "creative tool")) {
     return {
       status: "matched",
       params: { posture: "creative-tool" },
@@ -639,10 +627,7 @@ function withNavigationSteps(
   return expanded;
 }
 
-function surfaceAfterStep(
-  step: ResolvedIntentStep,
-  fallbackSurfaceId: SurfaceId,
-): SurfaceId {
+function surfaceAfterStep(step: ResolvedIntentStep, fallbackSurfaceId: SurfaceId): SurfaceId {
   if (
     step.actionId === "surface.navigate_surface" &&
     step.params &&
@@ -664,9 +649,7 @@ function splitIntoSegments(intent: string): string[] {
 }
 
 function matchesPattern(normalized: string, pattern: ScriptedActionPattern): boolean {
-  const allTermsMatch = (pattern.allTerms ?? []).every((term) =>
-    includesTerm(normalized, term),
-  );
+  const allTermsMatch = (pattern.allTerms ?? []).every((term) => includesTerm(normalized, term));
   const anyTerms = pattern.anyTerms ?? [];
   const anyTermsMatch =
     anyTerms.length === 0 || anyTerms.some((term) => includesTerm(normalized, term));

@@ -1,3 +1,8 @@
+/**
+ * Router integration tests for declared actions, read tools, and cross-surface chains.
+ * They verify that scripted intents resolve through registry data and runtime policy.
+ */
+
 import { describe, expect, it } from "vitest";
 import {
   applyDesignStoreEvent,
@@ -64,13 +69,17 @@ const documentedCases = [
     utterance: "hide pricing",
     sourceSurfaceId: designStudioSurfaceIds.editor,
     routeClass: "single action",
-    steps: [{ actionId: "section.set_visibility", params: { sectionId: "pricing", visible: false } }],
+    steps: [
+      { actionId: "section.set_visibility", params: { sectionId: "pricing", visible: false } },
+    ],
   },
   {
     utterance: "move social proof up",
     sourceSurfaceId: designStudioSurfaceIds.editor,
     routeClass: "single action",
-    steps: [{ actionId: "section.move_section", params: { sectionId: "social-proof", direction: "up" } }],
+    steps: [
+      { actionId: "section.move_section", params: { sectionId: "social-proof", direction: "up" } },
+    ],
   },
   {
     utterance: "apply the SaaS launch template",
@@ -137,10 +146,12 @@ describe("scripted Design Studio intent router", () => {
       });
 
       expect(route.routeClass, item.utterance).toBe(item.routeClass);
-      expect((route as ActionIntentRoute).steps.map((step) => ({
-        actionId: step.actionId,
-        params: step.params,
-      }))).toEqual(item.steps);
+      expect(
+        (route as ActionIntentRoute).steps.map((step) => ({
+          actionId: step.actionId,
+          params: step.params,
+        })),
+      ).toEqual(item.steps);
     }
   });
 
@@ -222,12 +233,18 @@ describe("scripted Design Studio intent router", () => {
       { utterance: "use the modern font pairing", sourceSurfaceId: designStudioSurfaceIds.editor },
       { utterance: "hide pricing", sourceSurfaceId: designStudioSurfaceIds.editor },
       { utterance: "move social proof up", sourceSurfaceId: designStudioSurfaceIds.editor },
-      { utterance: "apply the SaaS launch template", sourceSurfaceId: designStudioSurfaceIds.templates },
+      {
+        utterance: "apply the SaaS launch template",
+        sourceSurfaceId: designStudioSurfaceIds.templates,
+      },
       {
         utterance: "apply the SaaS launch template and make the accent forest green",
         sourceSurfaceId: designStudioSurfaceIds.templates,
       },
-      { utterance: "switch to citrus and hide pricing", sourceSurfaceId: designStudioSurfaceIds.editor },
+      {
+        utterance: "switch to citrus and hide pricing",
+        sourceSurfaceId: designStudioSurfaceIds.editor,
+      },
     ];
 
     for (const { utterance, sourceSurfaceId } of safeUtterances) {
@@ -273,9 +290,7 @@ describe("scripted Design Studio intent router", () => {
       );
 
       expect(decision.finalMode, utterance).toBe("Gated suffix");
-      expect(decision.requiredGate?.actionIds, utterance).toEqual([
-        route.steps[0].actionId,
-      ]);
+      expect(decision.requiredGate?.actionIds, utterance).toEqual([route.steps[0].actionId]);
     }
   });
 
@@ -649,9 +664,7 @@ function createHarness(options: HarnessOptions = {}) {
   return { host, registry };
 }
 
-function createReducerBackedHost(
-  options: { posture?: PosturePreset } = {},
-): ReducerBackedHost {
+function createReducerBackedHost(options: { posture?: PosturePreset } = {}): ReducerBackedHost {
   let state = createInitialDesignState();
   let posture = options.posture ?? "creative-tool";
   let currentSurfaceId: DesignStudioSurfaceId = designStudioSurfaceIds.editor;
@@ -660,22 +673,18 @@ function createReducerBackedHost(
     state = applyDesignStoreEvent(state, event);
   };
   const setters: DesignSetters = {
-    setPaletteToken: (token, value) =>
-      dispatch({ type: "paletteTokenSet", token, value }),
-    applyPalettePreset: (presetId) =>
-      dispatch({ type: "palettePresetApplied", presetId }),
+    setPaletteToken: (token, value) => dispatch({ type: "paletteTokenSet", token, value }),
+    applyPalettePreset: (presetId) => dispatch({ type: "palettePresetApplied", presetId }),
     setFontPairing: (value) => dispatch({ type: "fontPairingSet", value }),
     setTypeScale: (value) => dispatch({ type: "typeScaleSet", value }),
     setHeroLayout: (value) => dispatch({ type: "heroLayoutSet", value }),
     toggleSectionVisibility: (sectionId) =>
       dispatch({ type: "sectionVisibilityToggled", sectionId }),
-    moveSection: (sectionId, direction) =>
-      dispatch({ type: "sectionMoved", sectionId, direction }),
+    moveSection: (sectionId, direction) => dispatch({ type: "sectionMoved", sectionId, direction }),
     updateSectionText: (sectionId, field, value) =>
       dispatch({ type: "sectionTextUpdated", sectionId, field, value }),
     applyTemplate: (templateId) => dispatch({ type: "templateApplied", templateId }),
-    updateProjectMeta: (field, value) =>
-      dispatch({ type: "projectMetaUpdated", field, value }),
+    updateProjectMeta: (field, value) => dispatch({ type: "projectMetaUpdated", field, value }),
     copyShareLink: async () => {
       dispatch({
         type: "shareMessageSet",

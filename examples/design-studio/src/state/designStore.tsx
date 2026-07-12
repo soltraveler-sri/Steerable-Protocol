@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useReducer,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, useReducer, type ReactNode } from "react";
 import {
   defaultPalette,
   defaultProjectMeta,
@@ -125,10 +118,7 @@ function applyTemplateState(state: DesignState, templateId: string): DesignState
   };
 }
 
-export function applyDesignStoreEvent(
-  state: DesignState,
-  event: DesignStoreEvent,
-): DesignState {
+export function applyDesignStoreEvent(state: DesignState, event: DesignStoreEvent): DesignState {
   switch (event.type) {
     case "paletteTokenSet":
       return {
@@ -175,9 +165,7 @@ export function applyDesignStoreEvent(
       return {
         ...state,
         sections: state.sections.map((section) =>
-          section.id === event.sectionId
-            ? { ...section, visible: !section.visible }
-            : section,
+          section.id === event.sectionId ? { ...section, visible: !section.visible } : section,
         ),
       };
     case "sectionMoved": {
@@ -286,11 +274,7 @@ export function applyDesignStoreEvent(
 }
 
 export function DesignProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(
-    applyDesignStoreEvent,
-    undefined,
-    createInitialDesignState,
-  );
+  const [state, dispatch] = useReducer(applyDesignStoreEvent, undefined, createInitialDesignState);
 
   const copyShareLink = useCallback(async () => {
     const link = `${window.location.origin}/preview/${state.projectMeta.shareSlug}`;
@@ -319,10 +303,8 @@ export function DesignProvider({ children }: { children: ReactNode }) {
 
   const setters = useMemo<DesignSetters>(
     () => ({
-      setPaletteToken: (token, value) =>
-        dispatch({ type: "paletteTokenSet", token, value }),
-      applyPalettePreset: (presetId) =>
-        dispatch({ type: "palettePresetApplied", presetId }),
+      setPaletteToken: (token, value) => dispatch({ type: "paletteTokenSet", token, value }),
+      applyPalettePreset: (presetId) => dispatch({ type: "palettePresetApplied", presetId }),
       setFontPairing: (value) => dispatch({ type: "fontPairingSet", value }),
       setTypeScale: (value) => dispatch({ type: "typeScaleSet", value }),
       setHeroLayout: (value) => dispatch({ type: "heroLayoutSet", value }),
@@ -333,8 +315,7 @@ export function DesignProvider({ children }: { children: ReactNode }) {
       updateSectionText: (sectionId, field, value) =>
         dispatch({ type: "sectionTextUpdated", sectionId, field, value }),
       applyTemplate: (templateId) => dispatch({ type: "templateApplied", templateId }),
-      updateProjectMeta: (field, value) =>
-        dispatch({ type: "projectMetaUpdated", field, value }),
+      updateProjectMeta: (field, value) => dispatch({ type: "projectMetaUpdated", field, value }),
       copyShareLink,
       exportProject: () => dispatch({ type: "projectExported" }),
       resetProject: () => dispatch({ type: "projectReset" }),
