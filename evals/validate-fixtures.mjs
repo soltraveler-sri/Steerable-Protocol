@@ -1,3 +1,4 @@
+/** Validates every built-in fixture, including samples, without running an adapter. */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {

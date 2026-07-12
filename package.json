@@ -9,9 +9,12 @@
   ],
   "scripts": {
     "build": "tsc -b --force && npm --workspace design-studio run build",
-    "test": "npm --prefix examples/design-studio ci && npm run test --workspaces --if-present && npm --prefix examples/design-studio run evals"
+    "test": "npm --prefix examples/design-studio ci && npm run test --workspaces --if-present && npm --prefix examples/design-studio run evals",
+    "format": "prettier --write \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\"",
+    "format:check": "prettier --check \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\""
   },
   "devDependencies": {
+    "prettier": "^3.6.2",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }

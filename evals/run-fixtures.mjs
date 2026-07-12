@@ -1,3 +1,8 @@
+/**
+ * Runs canonical fixtures against Design Studio or an external adapter.
+ * Use `npm run evals -- --target=design-studio`, or pass both
+ * `--adapter=/path/to/adapter.mjs` and `--fixtures=/path/to/fixtures`.
+ */
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -21,10 +26,7 @@ const quarantines = loadQuarantines();
 const adapter = await loadAdapter(options);
 const fixtureFiles = findFixtureFiles(fixtureRoot, { includeSamples: false });
 const summaries = new Map(
-  suiteKinds.map((kind) => [
-    kind,
-    { total: 0, passed: 0, failed: 0, quarantined: 0 },
-  ]),
+  suiteKinds.map((kind) => [kind, { total: 0, passed: 0, failed: 0, quarantined: 0 }]),
 );
 let failures = 0;
 
@@ -163,10 +165,7 @@ async function loadAdapter(target) {
   const exampleDir = path.join(repoRoot, "examples/design-studio");
   const outdir = fs.mkdtempSync(path.join(os.tmpdir(), "steerable-evals-"));
   const outfile = path.join(outdir, "design-studio-adapter.mjs");
-  const entryPoint = path.join(
-    repoRoot,
-    "examples/design-studio/src/steerable/evalAdapter.ts",
-  );
+  const entryPoint = path.join(repoRoot, "examples/design-studio/src/steerable/evalAdapter.ts");
 
   try {
     await build({
@@ -207,7 +206,9 @@ async function loadAdapter(target) {
 async function loadExternalAdapter(rawAdapterPath) {
   if (!path.isAbsolute(rawAdapterPath)) {
     throw new Error(
-      "External adapter path must be absolute. Use --adapter=/absolute/path/to/adapter.mjs or STEERABLE_EVAL_ADAPTER=/absolute/path/to/adapter.mjs.",
+      "External adapter path must be absolute. " +
+        "Use --adapter=/absolute/path/to/adapter.mjs or " +
+        "STEERABLE_EVAL_ADAPTER=/absolute/path/to/adapter.mjs.",
     );
   }
 
@@ -290,7 +291,8 @@ function parseOptions(argv) {
       options.fixturesDir = path.resolve(fixturesDir);
     } else {
       throw new Error(
-        `Unknown option ${arg}. Supported options: --target=design-studio, --adapter=/absolute/path/to/adapter.mjs, --fixtures=/path/to/fixtures.`,
+        `Unknown option ${arg}. Supported options: --target=design-studio, ` +
+          "--adapter=/absolute/path/to/adapter.mjs, --fixtures=/path/to/fixtures.",
       );
     }
   }
@@ -378,7 +380,11 @@ function assertIntentFixture(expected, actual) {
   }
 
   if (expected.answer?.messageContains) {
-    assertContainsAll("answer.message", actual.answer?.message ?? "", expected.answer.messageContains);
+    assertContainsAll(
+      "answer.message",
+      actual.answer?.message ?? "",
+      expected.answer.messageContains,
+    );
   }
 
   if (expected.clarification) {
@@ -459,7 +465,11 @@ function assertReversibilityFixture(expected, actual) {
     assertEqual(`${expectedStep.stepId}.result`, expectedStep.result, actualStep.result);
 
     if (expectedStep.disclosure) {
-      assertDisclosure(`${expectedStep.stepId}.disclosure`, expectedStep.disclosure, actualStep.disclosure);
+      assertDisclosure(
+        `${expectedStep.stepId}.disclosure`,
+        expectedStep.disclosure,
+        actualStep.disclosure,
+      );
     }
   });
 
@@ -507,7 +517,11 @@ function assertFactsContextFixture(expected, actual) {
       throw new Error(`Missing facts declaration ${expectedFacts.id}`);
     }
 
-    assertParams(`facts.${expectedFacts.id}.values`, expectedFacts.values, actualFacts.values ?? {});
+    assertParams(
+      `facts.${expectedFacts.id}.values`,
+      expectedFacts.values,
+      actualFacts.values ?? {},
+    );
   });
 
   const expectedReadTools = expected.readTools ?? [];
@@ -571,10 +585,7 @@ function matchValue(matcher, actual) {
   }
 
   if (matcher.kind === "numericTolerance") {
-    return (
-      typeof actual === "number" &&
-      Math.abs(actual - matcher.value) <= matcher.tolerance
-    );
+    return typeof actual === "number" && Math.abs(actual - matcher.value) <= matcher.tolerance;
   }
 
   if (matcher.kind === "arrayUnordered") {
