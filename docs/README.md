@@ -1,7 +1,13 @@
-# Docs
+# Documentation
 
-This directory holds the written Stage-1 product: the normative spec, implementation guides, anti-patterns, research, and internal planning artifacts.
+Steerable's documentation is both the public protocol and an executable integration kit for developers and coding agents. Start with the [north-star](../Steerable-Protocol-NorthStar.md), then use the collection that matches your task.
 
-What belongs here is governed by the repo shape in [`ROADMAP.md#d1--repo-layout-repo`](./plan/ROADMAP.md#d1--repo-layout-repo) and the north-star sections on the repo shape, agent-readable kit, and developer experience ([§9](../Steerable-Protocol-NorthStar.md#9-repo-shape), [§8](../Steerable-Protocol-NorthStar.md#8-developer-experience-humans-and-coding-agents)).
+| Collection | What it contains |
+|---|---|
+| [Specification](./spec/README.md) | The normative protocol: declarations, policy, context, execution and surfaces, ledger, external bridge, and the [conformance checklist](./spec/conformance-checklist.md). |
+| [Guides](./guides/README.md) | Greenfield design, existing-app retrofit, coding-agent handoff, policy templates, and [ecosystem adapters](./guides/ecosystem-adapters.md). |
+| [Anti-patterns](./anti-patterns/README.md) | Six focused failure modes, from chatbot veneers and duplicate tools to universal planning and unsafe magic. |
+| [Research](./research/README.md) | Dated, sourced landscape research and category grounding. |
+| [Plan record](./plan/README.md) | The founding plan plus dated Stage-1 and Stage-2 gate evidence; these files are intentionally historical. |
 
-Runtime packages, app code, generated build output, and placeholder documents do not belong here. Documents should appear when their issue is ready to write real content.
+Normative requirements live in `spec/`. Guides and examples explain implementation choices without redefining those requirements. The current runtime packages live under [`packages/`](../packages/), and the package-backed proving ground lives under [`examples/design-studio/`](../examples/design-studio/).

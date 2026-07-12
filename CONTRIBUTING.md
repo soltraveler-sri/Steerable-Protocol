@@ -17,7 +17,7 @@ For implementation work, make the smallest complete change that satisfies the ac
 
 ## Pull Requests
 
-Use descriptive branch names, preferably `sprintN/issue-N-short-name` when the issue belongs to a sprint. Pull requests should link the issue, summarize the scoped change, list validation performed, and call out any deliberate deviation from the issue text.
+Use a short, descriptive branch name tied to the issue when one exists (for example, `docs/issue-78-package-readmes`). Pull requests should link the issue, summarize the scoped change, list validation performed, and call out any deliberate deviation from the issue text.
 
 Before opening a PR, sync with the GitHub remote, commit the intended files only, and make sure the working tree is clean. Do not include `Co-Authored-By` trailers unless the project owner asks for them.
 
