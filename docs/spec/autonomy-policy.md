@@ -266,4 +266,4 @@ This document was checked against the founding decision after drafting:
 
 ## 14. Resolution Note (Informative)
 
-Issue #41 resolves `effectFloor.applied` as a participation flag, not merely a mode-change flag: a candidate floor is applied when it is at least as restrictive as the mode present when the engine evaluates it. This preserves equal-floor evidence in the recorded rationale and makes no-floor and already-stricter cases deterministically false. The Design Studio proto-runtime uses that rule, so no example code change is required.
+Issue #41 resolves `effectFloor.applied` as a participation flag, not merely a mode-change flag: a candidate floor is applied when it is at least as restrictive as the mode present when the engine evaluates it. This preserves equal-floor evidence in the recorded rationale and makes no-floor and already-stricter cases deterministically false. The Design Studio example, now backed by `@steerable/core`, uses that rule, so no example code change is required.

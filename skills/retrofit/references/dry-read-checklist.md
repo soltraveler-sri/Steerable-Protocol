@@ -8,7 +8,7 @@ Run this before declaring the skill-driven task done or before handing the work 
 - Can it name which source is authoritative when `skills/retrofit/SKILL.md` and `docs/guides/retrofit-existing-app.md` disagree?
 - Can it produce the stop-before-code packet without reading hidden conversation context?
 - Can it explain how to handle `existing_integration_state: absent`, `partial`, and `complete`?
-- Can it identify the missing-SDK clause and the Design Studio proto-runtime no-copy rule?
+- Can it identify the runtime-availability guidance and the Design Studio proto-runtime no-copy rule?
 - Can it state the first-slice hard limits and what to do when the approved scope exceeds them?
 - Can it locate a non-colocated target path by explicit request, conservative repo-root heuristics, or human question, without guessing?
 - Can it establish the authoritative remote/branch, run the sync check, and name the exact unsafe-sync abort?

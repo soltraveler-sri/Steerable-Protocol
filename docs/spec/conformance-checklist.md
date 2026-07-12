@@ -166,6 +166,8 @@ PR description mapping: this issue resolves all four findings above and **Closes
 
 ## 8. Design Studio Validation (Informative)
 
+*Dated validation record: 2026-07-09, before the package migration; file references below reflect the repository at that time.*
+
 Validation target: `examples/design-studio`.
 
 Commands executed for this validation:

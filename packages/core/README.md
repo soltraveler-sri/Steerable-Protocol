@@ -1,14 +1,93 @@
 # `@steerable/core`
 
-The Stage-2 core package compiles SA-DECL declarations into a framework-agnostic registry, resolves SA-POL policy as a pure function, and executes approved work through declared executors with an in-memory SA-LED implementation. It deliberately has no runtime dependencies, DOM imports, or React imports.
+`@steerable/core` is the zero-dependency, framework-agnostic runtime for the Steerable protocol. It compiles app-owned capability declarations, resolves autonomy policy as a pure function, and executes approved actions through trusted app code with ledger and undo support. It imports no DOM, React, router, or model-provider APIs.
 
-## Decisions recorded for issue #61
+## Status
 
-- Declarations use a small structural schema adapter (`parse`, with optional JSON Schema) so integrators may use their existing validator without making one library part of the SDK contract.
-- `externalExposure` is materialized to `none` during compilation for actions and read tools; bridge eligibility is never inferred from risk or prose.
-- The `creative-tool` mapping is retained exactly from the reference runtime: clean safe reversible actions are instant, while quota work reaches a gated suffix.
-- Policy accepts registry availability and all mutable context as explicit inputs; resolving never calls executors, changes registry state, reads time implicitly, or performs I/O.
-- `SurfaceReadiness` is the public navigation/readiness seam: platform adapters await a declared surface and revalidate its next capability, with a 5000ms default.
-- `StateSnapshotAdapter` is the public state seam: app-owned capture/restore code supplies snapshot undo without exposing storage choices to core.
-- `ApprovalHook` is the public consent seam: product UI or services decide approved/declined for a declaration- and policy-derived scope; core never renders a gate.
-- `ActionLedger` exposes `getRecords()` and `subscribe()` so app-owned trail UI can reflect both runtime and external ledger writes without a parallel read model.
+The package works and is covered by the repository's build, unit tests, Design Studio example, and deterministic evals. It is not yet published to npm: vendor it from this repository for now, following the [root quickstart](../../README.md#try-it).
+
+## Define an action
+
+Declarations are the single source of truth for parameters, effects, policy metadata, execution, and recovery.
+
+```ts
+import { createStrictObjectSchema, defineAction } from "@steerable/core";
+
+let accent = "#3366FF";
+const setAccent = defineAction<{ hex: string }, { previousHex: string }>({
+  id: "palette.set_color", title: "Set accent", description: "Set the accent color.",
+  params: createStrictObjectSchema(["hex"], (input) => {
+    if (typeof input.hex !== "string") throw new Error("hex must be a string");
+    return { hex: input.hex };
+  }),
+  reads: ["design.palette"], writes: ["design.palette"], risk: "safe",
+  reversibility: { kind: "undoable" },
+  effects: { external: false, cost: "none", sensitive: false },
+  confirmation: "never", preconditions: [], externalExposure: "none",
+  execute: ({ hex }) => { const previousHex = accent; accent = hex; return { previousHex }; },
+  undo: ({ result }) => { if (result) accent = result.previousHex; },
+  guidance: "Use when the user names an exact accent color.",
+  examples: [{ user: "make the accent green", params: { hex: "#228B22" } }],
+});
+```
+
+## Compile the registry
+
+The registry validates declarations and makes live surface availability queryable.
+
+```ts
+import { CapabilityRegistry } from "@steerable/core";
+
+const registry = new CapabilityRegistry({
+  actions: [setAccent],
+  surfaces: [{ id: "editor", title: "Editor", description: "Design editor.", capabilities: [setAccent.id] }],
+});
+registry.registerSurface("editor");
+```
+
+## Resolve policy
+
+Policy resolution is pure: it returns an auditable decision without executing the action.
+
+```ts
+import { resolveActionPolicy } from "@steerable/core";
+
+const decision = resolveActionPolicy(registry.requireAction(setAccent.id), {
+  posture: "creative-tool", currentSurface: "editor", availability: registry,
+});
+```
+
+## Execute
+
+The engine revalidates parameters and policy, invokes only the declared executor, and records the result.
+
+```ts
+import { ExecutionEngine, InMemoryLedger } from "@steerable/core";
+
+const engine = new ExecutionEngine({ registry, ledger: new InMemoryLedger() });
+const result = await engine.executeAction({
+  intent: "make the accent forest green", surfaceId: "editor", posture: "creative-tool",
+  actionId: setAccent.id, params: { hex: "#228B22" },
+});
+```
+
+## Host seams
+
+- `SurfaceReadiness` lets a platform navigate, await a declared surface, and revalidate its next capability. Registry events provide the default implementation; the default timeout is 5000 ms.
+- `StateSnapshotAdapter` lets app-owned code capture and restore declared state keys for snapshot undo without exposing storage choices to core.
+- `ApprovalHook` lets product UI or services approve or decline the declaration- and policy-derived held scope. Core never renders a gate.
+
+## Spec map
+
+| Concept | Specification |
+|---|---|
+| Declarations and registry | [Capability declarations](../../docs/spec/capability-declarations.md) |
+| Policy decisions and postures | [Autonomy policy](../../docs/spec/autonomy-policy.md) |
+| Execution, approval, and surface readiness | [Execution and surfaces](../../docs/spec/execution-and-surfaces.md) |
+| Ledger and undo | [Action ledger](../../docs/spec/action-ledger.md) |
+| Facts and read context | [Context ladder](../../docs/spec/context-ladder.md) |
+| External exposure and adapters | [External bridge](../../docs/spec/external-bridge.md) |
+
+## Design notes
+
+Schemas use a small structural `parse` contract, with optional JSON Schema, so apps can keep their validator of choice. Omitted `externalExposure` compiles to `none`; bridge eligibility is never inferred. Mutable context is always an explicit policy input, and `ActionLedger` exposes `getRecords()` plus `subscribe()` for app-owned trail UI.
