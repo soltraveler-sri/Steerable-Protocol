@@ -1,3 +1,7 @@
+/**
+ * Shared fixture discovery, validation, loading, and matching for `run-fixtures.mjs`.
+ * The runner accepts `--target=design-studio`, or external `--adapter` and `--fixtures` paths.
+ */
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -51,7 +55,9 @@ function loadAjv() {
     const detail = error instanceof Error ? ` (${error.code ?? error.name})` : "";
 
     throw new Error(
-      `Missing evals dependency "ajv"${detail}. Run \`npm ci --prefix evals\` from the Steerable checkout before validating or running fixtures.`,
+      `Missing evals dependency "ajv"${detail}. ` +
+        "Run `npm ci --prefix evals` from the Steerable checkout before " +
+        "validating or running fixtures.",
     );
   }
 }
@@ -121,7 +127,7 @@ function parseScalar(rawValue) {
   if (/^-?(0|[1-9][0-9]*)(\.[0-9]+)?$/.test(value)) return Number(value);
 
   if (
-    (value.startsWith("\"") && value.endsWith("\"")) ||
+    (value.startsWith('"') && value.endsWith('"')) ||
     (value.startsWith("'") && value.endsWith("'"))
   ) {
     return value.slice(1, -1);
@@ -260,8 +266,7 @@ export function parseYamlSubset(text) {
 
 function isQuotedScalar(value) {
   return (
-    (value.startsWith("\"") && value.endsWith("\"")) ||
-    (value.startsWith("'") && value.endsWith("'"))
+    (value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))
   );
 }
 

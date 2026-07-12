@@ -7,7 +7,9 @@ import type {
   SurfaceId,
 } from "./registry.js";
 
+/** Framework-supplied posture preset. Implements SA-POL-140–147. */
 export type PosturePreset = "creative-tool" | "business-app" | "sensitive-domain";
+/** Complete seven-mode autonomy ladder. Implements SA-POL-080–097. */
 export type AutonomyMode =
   | "Read-only"
   | "Instant execution"
@@ -16,8 +18,10 @@ export type AutonomyMode =
   | "Plan preview"
   | "Step-gated"
   | "Refuse / hand off";
+/** Action-executing portion of the autonomy ladder. Implements SA-POL-096–097. */
 export type ExecutionMode = Exclude<AutonomyMode, "Read-only">;
 
+/** Developer policy floor scoped to an action or surface. Implements SA-POL-112–114. */
 export interface PolicyOverride {
   id: string;
   actionId?: string;
@@ -26,7 +30,10 @@ export interface PolicyOverride {
   reasonCode: string;
 }
 
-/** Explicit, scoped grant input. Destructive and confirmation-always actions never use it. */
+/**
+ * Explicit grant with action, surface, session, and expiration scope.
+ * Destructive and confirmation-always actions never use it. Implements SA-POL-126–133.
+ */
 export interface ScopedGrant {
   id: string;
   actionIds: string[];
@@ -39,16 +46,19 @@ export interface ScopedGrant {
   source?: "framework" | "developer";
 }
 
+/** Invocation-specific, single-rung autonomy demotion. Implements SA-POL-120–125. */
 export interface RuntimeSignalDemotion {
   id: string;
   reasonCode: string;
   demoteBy?: 1;
 }
 
+/** Registry availability query supplied as an explicit policy input. Implements SA-POL-104–105. */
 export interface PolicyAvailability {
   isActionAvailableOnSurface(actionId: string, surfaceId: SurfaceId): boolean;
 }
 
+/** Complete explicit input set for pure policy resolution. Implements SA-POL-102–105. */
 export interface PolicyInputs {
   posture: PosturePreset;
   currentSurface: SurfaceId;
@@ -63,6 +73,7 @@ export interface PolicyInputs {
   recordable?: boolean;
 }
 
+/** Registry-derived action metadata used by policy. Implements SA-POL-001–010. */
 export interface DeclarationPolicyMetadata {
   actionId: string;
   risk: Risk;
@@ -74,6 +85,7 @@ export interface DeclarationPolicyMetadata {
   preconditions: string[];
 }
 
+/** Auditable effect-floor application. Implements SA-POL-160–171. */
 export interface EffectFloorRecord {
   dimension: "cost" | "sensitive" | "external";
   value: string | boolean;
@@ -82,6 +94,7 @@ export interface EffectFloorRecord {
   reasonCode: string;
 }
 
+/** Auditable confirmation floor. Implements SA-POL-069–073. */
 export interface ConfirmationFloorRecord {
   value: Confirmation;
   floorMode?: ExecutionMode;
@@ -89,13 +102,14 @@ export interface ConfirmationFloorRecord {
   reasonCode: string;
 }
 
+/** Auditable grant use or non-use. Implements SA-POL-126–133. */
 export interface GrantUseRecord {
   used: boolean;
   grantIds: string[];
   reason: string;
 }
 
-/** The SA-POL-108 recordable rationale. */
+/** Recordable explanation of every policy input and floor that affected the result. Implements SA-POL-108. */
 export interface PolicyRationale {
   actionIds: string[];
   declarationMetadata: DeclarationPolicyMetadata[];
@@ -109,12 +123,14 @@ export interface PolicyRationale {
   reasonCodes: string[];
 }
 
+/** Resolved mode and rationale for one action in a chain. Implements SA-POL-107–108. */
 export interface PerActionPolicyDecision {
   actionId: string;
   mode: ExecutionMode;
   rationale: PolicyRationale;
 }
 
+/** Auditable policy output for an action or chain. Implements SA-POL-106–108. */
 export interface PolicyDecision {
   actionIds: string[];
   finalMode: AutonomyMode;
@@ -129,24 +145,53 @@ export interface PolicyDecision {
 
 type PresetGrid = Record<Risk, Record<ReversibilityKind, ExecutionMode>>;
 
+/** Complete risk-by-reversibility grids for the three posture presets. Implements SA-POL-140–147. */
 export const posturePresetMappings: Record<PosturePreset, PresetGrid> = {
   "creative-tool": {
-    safe: { undoable: "Instant execution", snapshot: "Instant execution", irreversible: "Instant execution" },
-    side_effect: { undoable: "Instant execution", snapshot: "Instant execution", irreversible: "Instant execution" },
-    mutating: { undoable: "Optimistic chain", snapshot: "Gated suffix", irreversible: "Gated suffix" },
+    safe: {
+      undoable: "Instant execution",
+      snapshot: "Instant execution",
+      irreversible: "Instant execution",
+    },
+    side_effect: {
+      undoable: "Instant execution",
+      snapshot: "Instant execution",
+      irreversible: "Instant execution",
+    },
+    mutating: {
+      undoable: "Optimistic chain",
+      snapshot: "Gated suffix",
+      irreversible: "Gated suffix",
+    },
     destructive: { undoable: "Gated suffix", snapshot: "Gated suffix", irreversible: "Step-gated" },
   },
   "business-app": {
-    safe: { undoable: "Optimistic chain", snapshot: "Optimistic chain", irreversible: "Gated suffix" },
-    side_effect: { undoable: "Optimistic chain", snapshot: "Gated suffix", irreversible: "Plan preview" },
+    safe: {
+      undoable: "Optimistic chain",
+      snapshot: "Optimistic chain",
+      irreversible: "Gated suffix",
+    },
+    side_effect: {
+      undoable: "Optimistic chain",
+      snapshot: "Gated suffix",
+      irreversible: "Plan preview",
+    },
     mutating: { undoable: "Gated suffix", snapshot: "Plan preview", irreversible: "Plan preview" },
     destructive: { undoable: "Plan preview", snapshot: "Plan preview", irreversible: "Step-gated" },
   },
   "sensitive-domain": {
-    safe: { undoable: "Optimistic chain", snapshot: "Optimistic chain", irreversible: "Plan preview" },
+    safe: {
+      undoable: "Optimistic chain",
+      snapshot: "Optimistic chain",
+      irreversible: "Plan preview",
+    },
     side_effect: { undoable: "Plan preview", snapshot: "Plan preview", irreversible: "Step-gated" },
     mutating: { undoable: "Plan preview", snapshot: "Step-gated", irreversible: "Step-gated" },
-    destructive: { undoable: "Step-gated", snapshot: "Step-gated", irreversible: "Refuse / hand off" },
+    destructive: {
+      undoable: "Step-gated",
+      snapshot: "Step-gated",
+      irreversible: "Refuse / hand off",
+    },
   },
 };
 
@@ -159,7 +204,10 @@ const EXECUTION_MODE_ORDER: ExecutionMode[] = [
   "Refuse / hand off",
 ];
 
-/** Purely resolves a single registry-compiled action; it does not execute or mutate. */
+/**
+ * Purely resolves one registry-compiled action without executing or mutating state.
+ * Implements SA-POL-100–106 and SA-POL-108.
+ */
 export function resolveActionPolicy(
   action: AnyCompiledActionDeclaration,
   inputs: PolicyInputs,
@@ -173,7 +221,10 @@ export function resolveActionPolicy(
   };
 }
 
-/** Purely resolves a proposed action chain and exposes its auditable gate boundary. */
+/**
+ * Purely resolves a proposed action chain and exposes its auditable gate boundary.
+ * Implements SA-POL-100–108.
+ */
 export function resolveChainPolicy(
   actions: AnyCompiledActionDeclaration[],
   inputs: PolicyInputs,
@@ -201,7 +252,11 @@ export function resolveChainPolicy(
   if (finalMode === "Plan preview") {
     decision.executedPrefixEndIndex = -1;
     decision.heldSuffixStartIndex = 0;
-    decision.requiredGate = { mode: "Plan preview", startIndex: 0, actionIds: [...decision.actionIds] };
+    decision.requiredGate = {
+      mode: "Plan preview",
+      startIndex: 0,
+      actionIds: [...decision.actionIds],
+    };
   } else {
     const gateIndex = perActionModes.findIndex((item) => requiresGateBoundary(item.mode));
     if (gateIndex >= 0) {
@@ -217,21 +272,28 @@ export function resolveChainPolicy(
   return decision;
 }
 
+/** Reports whether `left` is lower on the autonomy ladder than `right`. Implements SA-POL-096. */
 export function isLessAutonomous(left: ExecutionMode, right: ExecutionMode): boolean {
   return EXECUTION_MODE_ORDER.indexOf(left) > EXECUTION_MODE_ORDER.indexOf(right);
 }
 
+/** Applies the least-autonomous of a mode and policy floor. Implements SA-POL-096 and SA-POL-144. */
 export function applyModeFloor(mode: ExecutionMode, floor: ExecutionMode): ExecutionMode {
   return isLessAutonomous(floor, mode) ? floor : mode;
 }
 
-function resolveOneAction(action: AnyCompiledActionDeclaration, inputs: PolicyInputs): PerActionPolicyDecision {
+function resolveOneAction(
+  action: AnyCompiledActionDeclaration,
+  inputs: PolicyInputs,
+): PerActionPolicyDecision {
   const metadata = metadataFor(action);
   const reasonCodes: string[] = [];
   let mode = posturePresetMappings[inputs.posture][action.risk][action.reversibility.kind];
   reasonCodes.push(`preset:${inputs.posture}:${action.risk}:${action.reversibility.kind}:${mode}`);
 
-  const unavailable = inputs.availability && !inputs.availability.isActionAvailableOnSurface(action.id, inputs.currentSurface);
+  const unavailable =
+    inputs.availability &&
+    !inputs.availability.isActionAvailableOnSurface(action.id, inputs.currentSurface);
   const effectFloors = effectFloorsFor(action.effects, inputs.posture);
   for (const floor of effectFloors) {
     if (floor.floorMode) {
@@ -253,7 +315,9 @@ function resolveOneAction(action: AnyCompiledActionDeclaration, inputs: PolicyIn
   }
 
   const applicableOverrides = (inputs.overrides ?? []).filter(
-    (override) => (!override.actionId || override.actionId === action.id) && (!override.surfaceId || override.surfaceId === inputs.currentSurface),
+    (override) =>
+      (!override.actionId || override.actionId === action.id) &&
+      (!override.surfaceId || override.surfaceId === inputs.currentSurface),
   );
   for (const override of applicableOverrides) {
     mode = applyModeFloor(mode, override.minimumMode);
@@ -262,7 +326,9 @@ function resolveOneAction(action: AnyCompiledActionDeclaration, inputs: PolicyIn
 
   const grant = resolveGrantUse(action, inputs, mode, unavailable === true);
   if (grant.used && inputs.allowGrantsToRaiseAutonomy) {
-    const grantMode = (inputs.grants ?? []).find((grantItem) => grantItem.id === grant.grantIds[0])?.grantedMode;
+    const grantMode = (inputs.grants ?? []).find(
+      (grantItem) => grantItem.id === grant.grantIds[0],
+    )?.grantedMode;
     if (grantMode && !isLessAutonomous(grantMode, mode)) {
       mode = grantMode;
       reasonCodes.push("grant_used");
@@ -306,46 +372,125 @@ function resolveOneAction(action: AnyCompiledActionDeclaration, inputs: PolicyIn
 function effectFloorsFor(effects: ActionEffects, posture: PosturePreset): EffectFloorRecord[] {
   const floors: EffectFloorRecord[] = [];
   if (effects.cost === "quota") {
-    floors.push({ dimension: "cost", value: "quota", floorMode: posture === "creative-tool" ? "Gated suffix" : posture === "business-app" ? "Plan preview" : "Step-gated", applied: false, reasonCode: `effect_floor:${posture}:cost_quota` });
+    floors.push({
+      dimension: "cost",
+      value: "quota",
+      floorMode:
+        posture === "creative-tool"
+          ? "Gated suffix"
+          : posture === "business-app"
+            ? "Plan preview"
+            : "Step-gated",
+      applied: false,
+      reasonCode: `effect_floor:${posture}:cost_quota`,
+    });
   } else if (effects.cost === "money") {
-    floors.push({ dimension: "cost", value: "money", floorMode: posture === "creative-tool" ? "Plan preview" : "Step-gated", applied: false, reasonCode: `effect_floor:${posture}:cost_money` });
+    floors.push({
+      dimension: "cost",
+      value: "money",
+      floorMode: posture === "creative-tool" ? "Plan preview" : "Step-gated",
+      applied: false,
+      reasonCode: `effect_floor:${posture}:cost_money`,
+    });
   }
   if (effects.sensitive) {
-    const floorMode = posture === "creative-tool" ? (effects.external ? "Gated suffix" : undefined) : posture === "business-app" ? "Plan preview" : "Step-gated";
-    floors.push({ dimension: "sensitive", value: true, floorMode, applied: false, reasonCode: floorMode ? `effect_floor:${posture}:sensitive` : `effect_floor:${posture}:sensitive_local_no_floor` });
+    const floorMode =
+      posture === "creative-tool"
+        ? effects.external
+          ? "Gated suffix"
+          : undefined
+        : posture === "business-app"
+          ? "Plan preview"
+          : "Step-gated";
+    floors.push({
+      dimension: "sensitive",
+      value: true,
+      floorMode,
+      applied: false,
+      reasonCode: floorMode
+        ? `effect_floor:${posture}:sensitive`
+        : `effect_floor:${posture}:sensitive_local_no_floor`,
+    });
   }
   if (effects.external) {
     const floorMode = posture === "sensitive-domain" ? "Plan preview" : undefined;
-    floors.push({ dimension: "external", value: true, floorMode, applied: false, reasonCode: floorMode ? `effect_floor:${posture}:external` : `effect_floor:${posture}:external_no_floor` });
+    floors.push({
+      dimension: "external",
+      value: true,
+      floorMode,
+      applied: false,
+      reasonCode: floorMode
+        ? `effect_floor:${posture}:external`
+        : `effect_floor:${posture}:external_no_floor`,
+    });
   }
   return floors;
 }
 
 function confirmationFloorFor(confirmation: Confirmation): ConfirmationFloorRecord {
   return confirmation === "always"
-    ? { value: confirmation, floorMode: "Gated suffix", applied: false, reasonCode: "confirmation_floor:always" }
-    : { value: confirmation, applied: false, reasonCode: `confirmation_floor:${confirmation}:none` };
+    ? {
+        value: confirmation,
+        floorMode: "Gated suffix",
+        applied: false,
+        reasonCode: "confirmation_floor:always",
+      }
+    : {
+        value: confirmation,
+        applied: false,
+        reasonCode: `confirmation_floor:${confirmation}:none`,
+      };
 }
 
-function resolveGrantUse(action: AnyCompiledActionDeclaration, inputs: PolicyInputs, mode: ExecutionMode, unavailable: boolean): GrantUseRecord {
+function resolveGrantUse(
+  action: AnyCompiledActionDeclaration,
+  inputs: PolicyInputs,
+  mode: ExecutionMode,
+  unavailable: boolean,
+): GrantUseRecord {
   const matching = (inputs.grants ?? []).find((grant) => {
     const actionMatches = grant.actionIds.includes(action.id);
     const surfaceMatches = !grant.surfaceId || grant.surfaceId === inputs.currentSurface;
     const sessionMatches = !grant.sessionId || grant.sessionId === inputs.sessionId;
-    const unexpired = !grant.expiresAt || (inputs.now !== undefined && Date.parse(grant.expiresAt) > inputs.now.getTime());
+    const unexpired =
+      !grant.expiresAt ||
+      (inputs.now !== undefined && Date.parse(grant.expiresAt) > inputs.now.getTime());
     return actionMatches && surfaceMatches && sessionMatches && unexpired;
   });
   if (!matching) return { used: false, grantIds: [], reason: "no_applicable_grant" };
-  if (unavailable) return { used: false, grantIds: [matching.id], reason: "grant_cannot_authorize_unavailable_action" };
-  if (action.risk === "destructive") return { used: false, grantIds: [matching.id], reason: "grant_not_allowed_for_destructive_action" };
-  if (action.confirmation === "always") return { used: false, grantIds: [matching.id], reason: "grant_cannot_suppress_confirmation_always" };
-  if (!inputs.allowGrantsToRaiseAutonomy) return { used: false, grantIds: [matching.id], reason: "grant_available_but_policy_does_not_raise_autonomy" };
-  if (isLessAutonomous(matching.grantedMode, mode)) return { used: false, grantIds: [matching.id], reason: "grant_would_lower_autonomy" };
+  if (unavailable)
+    return {
+      used: false,
+      grantIds: [matching.id],
+      reason: "grant_cannot_authorize_unavailable_action",
+    };
+  if (action.risk === "destructive")
+    return {
+      used: false,
+      grantIds: [matching.id],
+      reason: "grant_not_allowed_for_destructive_action",
+    };
+  if (action.confirmation === "always")
+    return {
+      used: false,
+      grantIds: [matching.id],
+      reason: "grant_cannot_suppress_confirmation_always",
+    };
+  if (!inputs.allowGrantsToRaiseAutonomy)
+    return {
+      used: false,
+      grantIds: [matching.id],
+      reason: "grant_available_but_policy_does_not_raise_autonomy",
+    };
+  if (isLessAutonomous(matching.grantedMode, mode))
+    return { used: false, grantIds: [matching.id], reason: "grant_would_lower_autonomy" };
   return { used: true, grantIds: [matching.id], reason: "grant_applied" };
 }
 
 function demoteOneRung(mode: ExecutionMode): ExecutionMode {
-  return EXECUTION_MODE_ORDER[Math.min(EXECUTION_MODE_ORDER.indexOf(mode) + 1, EXECUTION_MODE_ORDER.length - 1)];
+  return EXECUTION_MODE_ORDER[
+    Math.min(EXECUTION_MODE_ORDER.indexOf(mode) + 1, EXECUTION_MODE_ORDER.length - 1)
+  ];
 }
 
 function leastAutonomous(modes: ExecutionMode[]): ExecutionMode {
@@ -371,22 +516,36 @@ function metadataFor(action: AnyCompiledActionDeclaration): DeclarationPolicyMet
 
 function emptyRationale(inputs: PolicyInputs): PolicyRationale {
   return {
-    actionIds: [], declarationMetadata: [], selectedPosturePreset: inputs.posture,
-    applicableOverrides: [], effectFloors: [],
+    actionIds: [],
+    declarationMetadata: [],
+    selectedPosturePreset: inputs.posture,
+    applicableOverrides: [],
+    effectFloors: [],
     confirmationFloor: { value: "never", applied: false, reasonCode: "confirmation_floor:none" },
     grant: { used: false, grantIds: [], reason: "no_action" },
-    runtimeSignalDemotions: inputs.runtimeSignalDemotions ?? [], finalMode: "Read-only", reasonCodes: ["read_only"],
+    runtimeSignalDemotions: inputs.runtimeSignalDemotions ?? [],
+    finalMode: "Read-only",
+    reasonCodes: ["read_only"],
   };
 }
 
-function mergeRationales(perAction: PerActionPolicyDecision[], inputs: PolicyInputs, finalMode: AutonomyMode): PolicyRationale {
+function mergeRationales(
+  perAction: PerActionPolicyDecision[],
+  inputs: PolicyInputs,
+  finalMode: AutonomyMode,
+): PolicyRationale {
   return {
     actionIds: perAction.map((item) => item.actionId),
     declarationMetadata: perAction.flatMap((item) => item.rationale.declarationMetadata),
     selectedPosturePreset: inputs.posture,
     applicableOverrides: perAction.flatMap((item) => item.rationale.applicableOverrides),
     effectFloors: perAction.flatMap((item) => item.rationale.effectFloors),
-    confirmationFloor: perAction.find((item) => item.rationale.confirmationFloor.applied)?.rationale.confirmationFloor ?? { value: "never", applied: false, reasonCode: "confirmation_floor:none_applied_in_chain" },
+    confirmationFloor: perAction.find((item) => item.rationale.confirmationFloor.applied)?.rationale
+      .confirmationFloor ?? {
+      value: "never",
+      applied: false,
+      reasonCode: "confirmation_floor:none_applied_in_chain",
+    },
     grant: mergeGrantUse(perAction),
     runtimeSignalDemotions: inputs.runtimeSignalDemotions ?? [],
     finalMode,
@@ -397,5 +556,9 @@ function mergeRationales(perAction: PerActionPolicyDecision[], inputs: PolicyInp
 function mergeGrantUse(perAction: PerActionPolicyDecision[]): GrantUseRecord {
   const grantIds = perAction.flatMap((item) => item.rationale.grant.grantIds);
   const used = perAction.some((item) => item.rationale.grant.used);
-  return { used, grantIds, reason: used ? "grant_applied" : perAction[0]?.rationale.grant.reason ?? "no_action" };
+  return {
+    used,
+    grantIds,
+    reason: used ? "grant_applied" : (perAction[0]?.rationale.grant.reason ?? "no_action"),
+  };
 }
