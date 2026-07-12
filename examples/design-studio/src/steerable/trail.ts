@@ -1,4 +1,19 @@
-import type { ActionStepRecord, CapabilityRegistry } from "@steerable/core";
+/**
+ * Presentation helpers for rendering protocol ledger records as an activity trail.
+ * The UI consumes these labels without reinterpreting execution or undo semantics.
+ */
+
+import type {
+  ActionStepRecord,
+  CapabilityRegistry,
+  SteeringInvocationRecord,
+} from "@steerable/core";
+
+export function undoToastLabelForRecord(record: Pick<SteeringInvocationRecord, "steps">): string {
+  return record.steps.some((step) => step.status === "failed")
+    ? "Chain failed. Completed steps can be undone."
+    : "Chain complete.";
+}
 
 export function trailTitleForStep(
   registry: CapabilityRegistry,

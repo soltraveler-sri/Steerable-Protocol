@@ -70,8 +70,7 @@ export const defaultSections: LandingSection[] = [
     kind: "hero",
     eyebrow: "New season preview",
     title: "Grow a calmer home, one plant at a time",
-    body:
-      "Field & Fern pairs resilient houseplants with simple care rituals for busy city homes.",
+    body: "Field & Fern pairs resilient houseplants with simple care rituals for busy city homes.",
     visible: true,
   },
   {
@@ -79,8 +78,7 @@ export const defaultSections: LandingSection[] = [
     kind: "features",
     eyebrow: "Why it works",
     title: "Plant care that fits into real life",
-    body:
-      "Guided watering cards, hardy starter bundles, and text reminders keep the routine light.",
+    body: "Guided watering cards, hardy starter bundles, and text reminders keep the routine light.",
     visible: true,
   },
   {
@@ -88,8 +86,7 @@ export const defaultSections: LandingSection[] = [
     kind: "socialProof",
     eyebrow: "Loved by early testers",
     title: "Designed for people who have killed a plant before",
-    body:
-      "The beta group reported fewer skipped watering days and more confidence choosing new plants.",
+    body: "The beta group reported fewer skipped watering days and more confidence choosing new plants.",
     visible: true,
   },
   {
@@ -97,8 +94,7 @@ export const defaultSections: LandingSection[] = [
     kind: "pricing",
     eyebrow: "Starter bundle",
     title: "$42 for the first month",
-    body:
-      "Includes two low-maintenance plants, ceramic labels, a care guide, and seasonal swaps.",
+    body: "Includes two low-maintenance plants, ceramic labels, a care guide, and seasonal swaps.",
     visible: true,
   },
   {
@@ -106,8 +102,7 @@ export const defaultSections: LandingSection[] = [
     kind: "footer",
     eyebrow: "Stay in the loop",
     title: "Join the spring waitlist",
-    body:
-      "Members get first access to bundle drops, care notes, and neighborhood pickup dates.",
+    body: "Members get first access to bundle drops, care notes, and neighborhood pickup dates.",
     visible: true,
   },
 ];
@@ -151,8 +146,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "hero",
         eyebrow: "Private beta",
         title: "Ship launch pages without losing the thread",
-        body:
-          "A lightweight workspace for teams turning positioning, copy, and mockups into one working page.",
+        body: "A lightweight workspace for teams turning positioning, copy, and mockups into one working page.",
         visible: true,
       },
       {
@@ -160,8 +154,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "features",
         eyebrow: "Built for momentum",
         title: "From strategy to page state in one pass",
-        body:
-          "Capture audience, sections, visual tokens, and export-ready direction before handoff.",
+        body: "Capture audience, sections, visual tokens, and export-ready direction before handoff.",
         visible: true,
       },
       {
@@ -169,8 +162,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "socialProof",
         eyebrow: "Pilot signal",
         title: "Three teams replaced their launch-doc sprawl",
-        body:
-          "Every pilot shipped a shareable direction in under a day, with fewer review loops.",
+        body: "Every pilot shipped a shareable direction in under a day, with fewer review loops.",
         visible: true,
       },
       {
@@ -178,8 +170,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "pricing",
         eyebrow: "Preview access",
         title: "$19 per seat in beta",
-        body:
-          "Invite collaborators, keep one active workspace, and export polished previews.",
+        body: "Invite collaborators, keep one active workspace, and export polished previews.",
         visible: true,
       },
       {
@@ -221,8 +212,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "hero",
         eyebrow: "Limited release",
         title: "A quieter collection for late summer rooms",
-        body:
-          "Hand-finished vessels, linen shades, and low forms built around warm evening light.",
+        body: "Hand-finished vessels, linen shades, and low forms built around warm evening light.",
         visible: true,
       },
       {
@@ -230,8 +220,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "features",
         eyebrow: "Materials",
         title: "Small-batch pieces with visible craft",
-        body:
-          "Stoneware, brass, and washed linen come together in a restrained palette.",
+        body: "Stoneware, brass, and washed linen come together in a restrained palette.",
         visible: true,
       },
       {
@@ -239,8 +228,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "socialProof",
         eyebrow: "Collector note",
         title: "Each run is numbered and signed",
-        body:
-          "Collectors receive provenance cards and early access to future seasonal drops.",
+        body: "Collectors receive provenance cards and early access to future seasonal drops.",
         visible: true,
       },
       {
@@ -248,8 +236,7 @@ export const designTemplates: DesignTemplate[] = [
         kind: "pricing",
         eyebrow: "Collection sets",
         title: "Sets begin at $280",
-        body:
-          "Reserve a three-piece grouping or join the first-look appointment list.",
+        body: "Reserve a three-piece grouping or join the first-look appointment list.",
         visible: true,
       },
       {

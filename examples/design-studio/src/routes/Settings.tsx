@@ -120,7 +120,9 @@ export function Settings() {
 
         <div className="danger-zone">
           <h3>Reset project</h3>
-          <p>Return the design and metadata to the starter state while keeping today's quota count.</p>
+          <p>
+            Return the design and metadata to the starter state while keeping today's quota count.
+          </p>
           <button type="button" className="danger" onClick={setters.resetProject}>
             Reset project
           </button>

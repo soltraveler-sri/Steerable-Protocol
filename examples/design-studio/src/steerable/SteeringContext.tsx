@@ -1,3 +1,8 @@
+/**
+ * React provider wiring for the reference integration.
+ * It adapts app state, routing, approvals, execution records, and undo into one UI-facing context.
+ */
+
 import {
   createContext,
   useCallback,
@@ -40,7 +45,7 @@ import {
   type DesignStudioCapabilityHost,
   type DesignStudioSurfaceId,
 } from "./designStudioCapabilities";
-import { canUndoAnyStep, canUndoStep } from "./trail";
+import { canUndoAnyStep, canUndoStep, undoToastLabelForRecord } from "./trail";
 
 interface SteeringNotice {
   id: string;
@@ -52,6 +57,7 @@ interface SteeringNotice {
 interface UndoToast {
   recordId: string;
   intent: string;
+  label: string;
 }
 
 interface SteeringContextValue {
@@ -211,15 +217,17 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
         if (route.routeClass !== "single action" && route.routeClass !== "action chain") {
           const message = "message" in route ? route.message : "No action was routed.";
 
-          setNotices((current) => [
-            {
-              id: `notice_${Date.now()}`,
-              routeClass: route.routeClass,
-              intent: trimmed,
-              message,
-            },
-            ...current,
-          ].slice(0, 4));
+          setNotices((current) =>
+            [
+              {
+                id: `notice_${Date.now()}`,
+                routeClass: route.routeClass,
+                intent: trimmed,
+                message,
+              },
+              ...current,
+            ].slice(0, 4),
+          );
           return;
         }
 
@@ -241,26 +249,26 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
         void run.done.then((result) => {
           refreshRecords();
 
-          if (
-            result.record.steps.length > 1 &&
-            canUndoAnyStep(result.record.steps)
-          ) {
+          if (result.record.steps.length > 1 && canUndoAnyStep(result.record.steps)) {
             setUndoToast({
               recordId: result.recordId,
               intent: trimmed,
+              label: undoToastLabelForRecord(result.record),
             });
           }
         });
       } catch (error) {
-        setNotices((current) => [
-          {
-            id: `notice_${Date.now()}`,
-            routeClass: "refusal/handoff" as const,
-            intent: trimmed,
-            message: error instanceof Error ? error.message : String(error),
-          },
-          ...current,
-        ].slice(0, 4));
+        setNotices((current) =>
+          [
+            {
+              id: `notice_${Date.now()}`,
+              routeClass: "refusal/handoff" as const,
+              intent: trimmed,
+              message: error instanceof Error ? error.message : String(error),
+            },
+            ...current,
+          ].slice(0, 4),
+        );
       } finally {
         setIsSubmitting(false);
       }
@@ -368,7 +376,11 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <SteerableRuntimeProvider runtime={runtime}><SteeringContext.Provider value={value}>{children}</SteeringContext.Provider></SteerableRuntimeProvider>;
+  return (
+    <SteerableRuntimeProvider runtime={runtime}>
+      <SteeringContext.Provider value={value}>{children}</SteeringContext.Provider>
+    </SteerableRuntimeProvider>
+  );
 }
 
 export function useSteering() {
@@ -381,24 +393,19 @@ export function useSteering() {
   return context;
 }
 
-function createSetterProxy(
-  settersRef: MutableRefObject<DesignSetters>,
-): DesignSetters {
+function createSetterProxy(settersRef: MutableRefObject<DesignSetters>): DesignSetters {
   return {
     setPaletteToken: (token, value) => settersRef.current.setPaletteToken(token, value),
     applyPalettePreset: (presetId) => settersRef.current.applyPalettePreset(presetId),
     setFontPairing: (value) => settersRef.current.setFontPairing(value),
     setTypeScale: (value) => settersRef.current.setTypeScale(value),
     setHeroLayout: (value) => settersRef.current.setHeroLayout(value),
-    toggleSectionVisibility: (sectionId) =>
-      settersRef.current.toggleSectionVisibility(sectionId),
-    moveSection: (sectionId, direction) =>
-      settersRef.current.moveSection(sectionId, direction),
+    toggleSectionVisibility: (sectionId) => settersRef.current.toggleSectionVisibility(sectionId),
+    moveSection: (sectionId, direction) => settersRef.current.moveSection(sectionId, direction),
     updateSectionText: (sectionId, field, value) =>
       settersRef.current.updateSectionText(sectionId, field, value),
     applyTemplate: (templateId) => settersRef.current.applyTemplate(templateId),
-    updateProjectMeta: (field, value) =>
-      settersRef.current.updateProjectMeta(field, value),
+    updateProjectMeta: (field, value) => settersRef.current.updateProjectMeta(field, value),
     copyShareLink: () => settersRef.current.copyShareLink(),
     exportProject: () => settersRef.current.exportProject(),
     resetProject: () => settersRef.current.resetProject(),
@@ -443,10 +450,7 @@ function surfacePathForId(surfaceId: DesignStudioSurfaceId): string {
   return "/";
 }
 
-function surfaceRegistrationDelayMs(
-  surfaceId: DesignStudioSurfaceId,
-  search: string,
-): number {
+function surfaceRegistrationDelayMs(surfaceId: DesignStudioSurfaceId, search: string): number {
   if (!import.meta.env.DEV) {
     return 0;
   }

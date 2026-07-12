@@ -1,3 +1,8 @@
+/**
+ * Deterministic adapter between canonical eval fixtures and the Design Studio registry.
+ * It exposes router data and execution traces without adding a second capability model.
+ */
+
 import {
   applyDesignStoreEvent,
   createInitialDesignState,
@@ -264,12 +269,11 @@ function resolve(fixture: EvalFixture) {
     denial:
       decision.finalMode === "Refuse / hand off"
         ? {
-            reasonCode:
-              normalizeReasonCode(
-                decision.rationale.reasonCodes.find((code) =>
-                  code.includes("destructive_confirmation_missing"),
-                ) ?? "policy_refused",
-              ),
+            reasonCode: normalizeReasonCode(
+              decision.rationale.reasonCodes.find((code) =>
+                code.includes("destructive_confirmation_missing"),
+              ) ?? "policy_refused",
+            ),
             message: decision.refusalReason ?? "Policy refused the proposed actions.",
           }
         : undefined,
@@ -324,8 +328,7 @@ async function execute(fixture: EvalFixture) {
       : undefined;
 
   return {
-    negativeCase:
-      result.failure?.code === "surface_readiness_timeout" ? "timeout-failure" : "none",
+    negativeCase: result.failure?.code === "surface_readiness_timeout" ? "timeout-failure" : "none",
     sequence: crossSurfaceSequence(given, result.status, result.failure?.code),
     failure: result.failure
       ? {
@@ -374,7 +377,8 @@ async function context(fixture: EvalFixture) {
 
 async function undo(fixture: EvalFixture) {
   const given = fixture.given as ReversibilityGiven;
-  const surfaceId = asSurface(given.executed.ledgerState?.surfaceId) ?? designStudioSurfaceIds.editor;
+  const surfaceId =
+    asSurface(given.executed.ledgerState?.surfaceId) ?? designStudioSurfaceIds.editor;
   const posture = asPosture(given.executed.ledgerState?.posturePreset) ?? "creative-tool";
   const harness = createHarness({
     posture,
@@ -581,9 +585,7 @@ function policyInputsFor(given: PolicyGiven): PolicyInputs {
   };
 }
 
-function mapStickyGrants(
-  grants: NonNullable<PolicyGiven["stickyGrants"]>,
-): ScopedGrant[] {
+function mapStickyGrants(grants: NonNullable<PolicyGiven["stickyGrants"]>): ScopedGrant[] {
   return grants.map((grant) => {
     const subject = grant.subject.startsWith("action:")
       ? grant.subject.slice("action:".length)
@@ -631,10 +633,7 @@ function mapRuntimeSignalDemotions(runtimeSignals: JsonObject): RuntimeSignalDem
   ];
 }
 
-function boundariesFor(
-  steps: PolicyStep[],
-  decision: ReturnType<typeof resolveChainPolicy>,
-) {
+function boundariesFor(steps: PolicyStep[], decision: ReturnType<typeof resolveChainPolicy>) {
   if (
     decision.executedPrefixEndIndex === undefined &&
     decision.heldSuffixStartIndex === undefined &&
@@ -715,7 +714,9 @@ function crossSurfaceSequence(
 ) {
   const navigation = given.chain.find((step) => step.actionId === "surface.navigate_surface");
   const continuation = given.chain.find(
-    (step) => step.actionId !== "surface.navigate_surface" && step.targetSurfaceId === given.registrationScenario.targetSurfaceId,
+    (step) =>
+      step.actionId !== "surface.navigate_surface" &&
+      step.targetSurfaceId === given.registrationScenario.targetSurfaceId,
   );
   const sequence: JsonObject[] = [];
 
@@ -736,7 +737,8 @@ function crossSurfaceSequence(
   sequence.push({
     kind: "await-capabilities",
     surfaceId: given.registrationScenario.targetSurfaceId,
-    capabilityIds: continuation?.requiresCapabilities ?? (continuation ? [continuation.actionId] : []),
+    capabilityIds:
+      continuation?.requiresCapabilities ?? (continuation ? [continuation.actionId] : []),
     timeoutMs: given.registrationScenario.timeoutMs,
   });
 
@@ -749,7 +751,10 @@ function crossSurfaceSequence(
     });
   } else if (failureCode) {
     sequence.push({
-      kind: failureCode === "surface_readiness_timeout" ? "fail-timeout" : "fail-capability-unavailable",
+      kind:
+        failureCode === "surface_readiness_timeout"
+          ? "fail-timeout"
+          : "fail-capability-unavailable",
       stepId: continuation?.stepId,
       actionId: continuation?.actionId,
       surfaceId: given.registrationScenario.targetSurfaceId,
@@ -762,7 +767,10 @@ function crossSurfaceSequence(
   return sequence;
 }
 
-function stepResultsFor(given: ReversibilityGiven, record: ReturnType<InMemoryLedger["requireRecord"]>) {
+function stepResultsFor(
+  given: ReversibilityGiven,
+  record: ReturnType<InMemoryLedger["requireRecord"]>,
+) {
   return given.executed.steps.map((fixtureStep) => {
     const recordStep = record.steps.find((step) => step.stepId === fixtureStep.stepId);
 
@@ -841,7 +849,9 @@ function refusedUndoResult(
   };
 }
 
-function asExecutionMode(value: unknown): Exclude<AutonomyMode, "Read-only" | "Refuse / hand off"> | undefined {
+function asExecutionMode(
+  value: unknown,
+): Exclude<AutonomyMode, "Read-only" | "Refuse / hand off"> | undefined {
   const modes = [
     "Instant execution",
     "Optimistic chain",
@@ -862,7 +872,5 @@ function asPosture(value: unknown): PosturePreset | undefined {
 }
 
 function asSurface(value: unknown): DesignStudioSurfaceId | undefined {
-  return value === "editor" || value === "templates" || value === "settings"
-    ? value
-    : undefined;
+  return value === "editor" || value === "templates" || value === "settings" ? value : undefined;
 }

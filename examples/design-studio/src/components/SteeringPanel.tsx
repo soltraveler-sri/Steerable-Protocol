@@ -6,11 +6,7 @@ import type {
   SteeringInvocationRecord,
   StepStatus,
 } from "@steerable/core";
-import {
-  canUndoStep,
-  trailDescriptionForStep,
-  trailTitleForStep,
-} from "../steerable/trail";
+import { canUndoStep, trailDescriptionForStep, trailTitleForStep } from "../steerable/trail";
 
 const statusLabels: Record<StepStatus, string> = {
   proposed: "Pending",
@@ -89,7 +85,7 @@ export function SteeringPanel() {
 
       {undoToast ? (
         <section className="undo-toast" aria-label="Undo all available">
-          <span>Chain complete.</span>
+          <span>{undoToast.label}</span>
           <div>
             <button type="button" onClick={() => undoAll(undoToast.recordId)}>
               Undo all
@@ -104,7 +100,10 @@ export function SteeringPanel() {
       {notices.length > 0 ? (
         <section className="route-notices" aria-label="Router responses">
           {notices.map((notice) => (
-            <article key={notice.id} className={`route-notice ${classNameForRoute(notice.routeClass)}`}>
+            <article
+              key={notice.id}
+              className={`route-notice ${classNameForRoute(notice.routeClass)}`}
+            >
               <span>{notice.routeClass}</span>
               <p>{notice.message}</p>
             </article>
@@ -115,7 +114,9 @@ export function SteeringPanel() {
       <section className="activity-trail" aria-label="Activity trail">
         <div className="trail-header">
           <p className="eyebrow">Activity</p>
-          <span>{records.length} entr{records.length === 1 ? "y" : "ies"}</span>
+          <span>
+            {records.length} entr{records.length === 1 ? "y" : "ies"}
+          </span>
         </div>
         {records.length === 0 ? (
           <p className="empty-trail">No activity yet.</p>

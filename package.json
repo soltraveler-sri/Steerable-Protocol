@@ -10,8 +10,8 @@
   "scripts": {
     "build": "tsc -b --force && npm --workspace design-studio run build",
     "test": "npm --prefix examples/design-studio ci && npm run test --workspaces --if-present && npm --prefix examples/design-studio run evals",
-    "format": "prettier --write \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\"",
-    "format:check": "prettier --check \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\""
+    "format": "prettier --write \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\" \"examples/design-studio/src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\" \"examples/design-studio/src/**/*.{ts,tsx}\""
   },
   "devDependencies": {
     "prettier": "^3.6.2",
