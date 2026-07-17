@@ -10,6 +10,8 @@
   "scripts": {
     "build": "tsc -b --force && npm --workspace design-studio run build",
     "typecheck:tests": "tsc -p tsconfig.tests.json",
+    "coverage:check": "node skills/integration-audit/scripts/check-coverage.mjs",
+    "coverage:matrix": "node skills/integration-audit/scripts/check-coverage.mjs --matrix",
     "test": "npm --prefix examples/design-studio ci && npm run test --workspaces --if-present && npm --prefix examples/design-studio run evals",
     "format": "prettier --write \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\" \"examples/design-studio/src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"packages/**/*.ts\" \"evals/**/*.mjs\" \"evals/lib/**\" \"examples/design-studio/src/**/*.{ts,tsx}\""
