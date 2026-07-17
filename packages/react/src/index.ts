@@ -40,6 +40,17 @@ function isDevelopment(): boolean {
 }
 
 /**
+ * Reports a ledger refresh failure instead of discarding it.
+ * A durable ledger read can reject, and a discarded rejection surfaces as an
+ * unhandled rejection with no attribution. Reporting is unconditional: a
+ * terminal steering error must stay observable wherever the runtime hosts.
+ * Implements SA-EXEC-012 and SA-LED-142.
+ */
+function reportLedgerRefreshFailure(error: unknown): void {
+  console.error("Steerable: reading the ledger for the trail snapshot failed.", error);
+}
+
+/**
  * Runs before paint on the client and degrades to a passive effect on the server,
  * where `useLayoutEffect` is a no-op that React warns about.
  *
@@ -174,8 +185,8 @@ export interface SteerableRuntime {
   readonly engine: ExecutionEngine;
   /** Synchronously readable snapshot of every fact the live surfaces have published. */
   readonly facts: FactsSnapshotStore;
-  executeChain(request: ExecuteChainRequest): ChainExecutionRun;
-  executeAction(request: ExecuteActionRequest): ChainExecutionRun;
+  executeChain(request: ExecuteChainRequest): Promise<ChainExecutionRun>;
+  executeAction(request: ExecuteActionRequest): Promise<ChainExecutionRun>;
   undoAll(run: ChainExecutionRun): Promise<void>;
   subscribe(listener: () => void): () => void;
   getSnapshot(): SteerableState;
@@ -205,8 +216,8 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
     };
     listeners.forEach((listener) => listener());
   };
-  const refreshRecords = () => {
-    ledger.getRecords().forEach((record) => records.set(record.recordId, record));
+  const refreshRecords = async () => {
+    (await ledger.getRecords()).forEach((record) => records.set(record.recordId, record));
   };
   const approvalHook: ApprovalHook = async (request) => {
     pendingApproval = request;
@@ -229,33 +240,34 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
     surfaceReadiness: options.surfaceReadiness,
     now: options.now,
   });
-  const track = (run: ChainExecutionRun) => {
-    records.set(run.recordId, run.getRecord());
-    refreshRecords();
+  const track = async (run: ChainExecutionRun) => {
+    records.set(run.recordId, await run.getRecord());
+    await refreshRecords();
     emit();
-    void run.done.finally(() => {
-      records.set(run.recordId, run.getRecord());
-      refreshRecords();
-      emit();
-    });
+    run.done
+      .finally(async () => {
+        records.set(run.recordId, await run.getRecord());
+        await refreshRecords();
+        emit();
+      })
+      .catch(reportLedgerRefreshFailure);
     return run;
   };
 
-  refreshRecords();
+  refreshRecords().then(emit).catch(reportLedgerRefreshFailure);
   snapshot = { records: Array.from(records.values()), pendingApproval };
   ledger.subscribe(() => {
-    refreshRecords();
-    emit();
+    refreshRecords().then(emit).catch(reportLedgerRefreshFailure);
   });
   const runtime: SteerableRuntime = {
     registry,
     ledger,
     engine,
     facts,
-    executeChain: (request) => track(engine.executeChain(request)),
+    executeChain: (request) => engine.executeChain(request).then(track),
     executeAction: (request) =>
-      track(
-        engine.executeChain({
+      engine
+        .executeChain({
           ...request,
           steps: [
             {
@@ -265,12 +277,12 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
               surfaceTimeoutMs: request.surfaceTimeoutMs,
             },
           ],
-        }),
-      ),
+        })
+        .then(track),
     undoAll: async (run) => {
       await run.undoAll();
-      records.set(run.recordId, run.getRecord());
-      refreshRecords();
+      records.set(run.recordId, await run.getRecord());
+      await refreshRecords();
       emit();
     },
     subscribe: (listener) => {

@@ -125,7 +125,7 @@ describe("SA-EXEC and SA-LED core", () => {
     const core = registry([set], { editor: [set.id] });
     const ledger = new InMemoryLedger();
     const engine = new ExecutionEngine({ registry: core, ledger });
-    const run = engine.executeChain({
+    const run = await engine.executeChain({
       intent: "set color",
       surfaceId: "editor",
       posture: "creative-tool",
@@ -152,15 +152,17 @@ describe("SA-EXEC and SA-LED core", () => {
       ledger,
       approvalHook: async () => ({ status: "declined", reason: "no export" }),
     });
-    const result = await engine.executeChain({
-      intent: "set then export",
-      surfaceId: "editor",
-      posture: "creative-tool",
-      steps: [
-        { actionId: prefix.id, params: { value: "green" } },
-        { actionId: suffix.id, params: { value: "pdf" } },
-      ],
-    }).done;
+    const result = await (
+      await engine.executeChain({
+        intent: "set then export",
+        surfaceId: "editor",
+        posture: "creative-tool",
+        steps: [
+          { actionId: prefix.id, params: { value: "green" } },
+          { actionId: suffix.id, params: { value: "pdf" } },
+        ],
+      })
+    ).done;
     expect(result.status).toBe("declined");
     expect(result.record.steps.map((step) => step.status)).toEqual(["succeeded", "skipped"]);
     expect(result.record.steps[0].undo).toMatchObject({ status: "available" });
@@ -187,15 +189,17 @@ describe("SA-EXEC and SA-LED core", () => {
         }),
       },
     });
-    const result = await engine.executeChain({
-      intent: "set then switch",
-      surfaceId: "editor",
-      posture: "creative-tool",
-      steps: [
-        { actionId: prefix.id, params: { value: "green" } },
-        { actionId: destination.id, params: { value: "dark" }, targetSurfaceId: "settings" },
-      ],
-    }).done;
+    const result = await (
+      await engine.executeChain({
+        intent: "set then switch",
+        surfaceId: "editor",
+        posture: "creative-tool",
+        steps: [
+          { actionId: prefix.id, params: { value: "green" } },
+          { actionId: destination.id, params: { value: "dark" }, targetSurfaceId: "settings" },
+        ],
+      })
+    ).done;
     expect(result.failure?.code).toBe("surface_readiness_timeout");
     expect(result.record.steps.map((step) => step.status)).toEqual(["succeeded", "failed"]);
     expect(result.record.disclosures.some((item) => item.kind === "cross_surface_failure")).toBe(
@@ -240,7 +244,7 @@ describe("SA-EXEC and SA-LED core", () => {
       snapshotStore: store.adapter,
       approvalHook: async () => ({ status: "approved" }),
     });
-    const run = engine.executeChain({
+    const run = await engine.executeChain({
       intent: "change then export",
       surfaceId: "editor",
       posture: "creative-tool",
@@ -266,20 +270,22 @@ describe("SA-EXEC and SA-LED core", () => {
     });
     const core = registry([planned], { editor: [planned.id] });
     let gates = 0;
-    const result = await new ExecutionEngine({
-      registry: core,
-      ledger: new InMemoryLedger(),
-      snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
-      approvalHook: async () => {
-        gates += 1;
-        return { status: "approved" };
-      },
-    }).executeChain({
-      intent: "export",
-      surfaceId: "editor",
-      posture: "business-app",
-      steps: [{ actionId: planned.id, params: { value: "out" } }],
-    }).done;
+    const result = await (
+      await new ExecutionEngine({
+        registry: core,
+        ledger: new InMemoryLedger(),
+        snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
+        approvalHook: async () => {
+          gates += 1;
+          return { status: "approved" };
+        },
+      }).executeChain({
+        intent: "export",
+        surfaceId: "editor",
+        posture: "business-app",
+        steps: [{ actionId: planned.id, params: { value: "out" } }],
+      })
+    ).done;
     expect(result.status).toBe("succeeded");
     expect(gates).toBe(1);
     expect(result.record.approval.status).toBe("approved");
@@ -288,12 +294,20 @@ describe("SA-EXEC and SA-LED core", () => {
   it("cancels, settles, then reverses an in-flight chain step during undo-all", async () => {
     let state = "before";
     let release!: () => void;
+    let markStarted!: () => void;
     const settled = new Promise<void>((resolve) => {
       release = resolve;
+    });
+    // Resolves once the executor has actually been entered. The test previously relied on a single
+    // microtask turn to reach the in-flight state, which silently coupled it to the engine's
+    // internal await count; awaiting the executor itself asserts the same scenario directly.
+    const inFlight = new Promise<void>((resolve) => {
+      markStarted = resolve;
     });
     const set = action("palette.set_color", {
       execute: async ({ value }) => {
         const previous = state;
+        markStarted();
         await settled;
         state = value;
         return previous;
@@ -304,18 +318,18 @@ describe("SA-EXEC and SA-LED core", () => {
     });
     const core = registry([set], { editor: [set.id] });
     const engine = new ExecutionEngine({ registry: core, ledger: new InMemoryLedger() });
-    const run = engine.executeChain({
+    const run = await engine.executeChain({
       intent: "set color",
       surfaceId: "editor",
       posture: "creative-tool",
       steps: [{ actionId: set.id, params: { value: "after" } }],
     });
-    await Promise.resolve();
+    await inFlight;
     const undo = run.undoAll();
     release();
     expect((await undo).status).toBe("succeeded");
     expect((await run.done).status).toBe("canceled");
     expect(state).toBe("before");
-    expect(run.getRecord().steps[0].status).toBe("undone");
+    expect((await run.getRecord()).steps[0].status).toBe("undone");
   });
 });

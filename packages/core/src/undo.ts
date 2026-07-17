@@ -109,20 +109,24 @@ export async function runUndoHandle(
       errorSummary: `Undo handle is ${handle.status}.`,
     };
   const runtimeHandle = handle as RuntimeUndoHandle;
-  ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, { status: "attempted" });
+  await ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, {
+    status: "attempted",
+  });
   try {
     await runtimeHandle.execute(context);
-    ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, {
+    await ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, {
       status: "succeeded",
     });
-    ledger.updateStep(handle.recordId, handle.stepId, {
+    await ledger.updateStep(handle.recordId, handle.stepId, {
       status: "undone",
       executionResult: { ok: true, result: "undone" },
     });
     return { handleId: handle.handleId, status: "succeeded" };
   } catch (error) {
     const errorSummary = error instanceof Error ? error.message : String(error);
-    ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, { status: "failed" });
+    await ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, {
+      status: "failed",
+    });
     return { handleId: handle.handleId, status: "failed", errorSummary };
   }
 }
@@ -137,9 +141,8 @@ export async function undoAll(
   context: ActionExecutionContext,
   options: { allowPartial?: boolean } = {},
 ): Promise<UndoAllResult> {
-  const succeeded = ledger
-    .requireRecord(recordId)
-    .steps.filter((step) => step.status === "succeeded")
+  const succeeded = (await ledger.requireRecord(recordId)).steps
+    .filter((step) => step.status === "succeeded")
     .sort((a, b) => b.order - a.order);
   const available = succeeded.filter(
     (step) => "handleId" in step.undo && step.undo.status === "available",
@@ -147,7 +150,7 @@ export async function undoAll(
   const unavailable = succeeded.filter(
     (step) => !("handleId" in step.undo) || step.undo.status !== "available",
   );
-  const attempt = ledger.appendUndoAttempt(recordId, {
+  const attempt = await ledger.appendUndoAttempt(recordId, {
     targetHandleIds: available.map((step) => ("handleId" in step.undo ? step.undo.handleId : "")),
     status: "pending",
     perHandleResults: [],
@@ -186,17 +189,17 @@ export async function undoAll(
     [...unavailable.map((step) => step.stepId), ...failed],
   );
 
-  function settle(
+  async function settle(
     status: UndoAllResult["status"],
     undoneStepIds: string[],
     notUndoneStepIds: string[],
-  ): UndoAllResult {
+  ): Promise<UndoAllResult> {
     const disclosure =
       status === "succeeded"
         ? undefined
         : `Partial undo: reversed ${undoneStepIds.join(", ") || "none"}; ` +
           `not reversed ${notUndoneStepIds.join(", ") || "none"}.`;
-    ledger.updateUndoAttempt(recordId, attempt.undoAttemptId, {
+    await ledger.updateUndoAttempt(recordId, attempt.undoAttemptId, {
       status,
       settledAt: new Date().toISOString(),
       perHandleResults: results.map((result) => ({
@@ -207,7 +210,7 @@ export async function undoAll(
       disclosure,
     });
     if (disclosure)
-      ledger.appendDisclosure(recordId, {
+      await ledger.appendDisclosure(recordId, {
         kind: "partial_undo",
         message: disclosure,
         stepIds: notUndoneStepIds,

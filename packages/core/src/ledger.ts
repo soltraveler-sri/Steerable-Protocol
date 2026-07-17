@@ -1,5 +1,5 @@
 import type { AutonomyMode, PolicyDecision, PolicyRationale } from "./policy.js";
-import type { ReversibilityKind, StateKey } from "./registry.js";
+import type { MaybePromise, ReversibilityKind, StateKey } from "./registry.js";
 
 /** Stable action-step lifecycle vocabulary. Implements SA-LED-030. */
 export type StepStatus =
@@ -135,41 +135,55 @@ export interface CreateInvocationInput {
 
 /**
  * Host-replaceable storage seam for minimal steering records.
- * Backends may be session-memory or durable while preserving the same record semantics.
- * Implements SA-LED-140–146.
+ *
+ * Every method returns `MaybePromise` so one contract serves both backend classes required by
+ * SA-LED-144. A session-memory backend returns plain values and stays fully synchronous; a server
+ * durable backend returns promises whose settlement *is* the write's success-or-failure report.
+ *
+ * This is what makes SA-LED-141 honorable rather than aspirational: the runtime awaits every ledger
+ * write, so a write that policy requires before execution (the invocation record and its policy
+ * decision) has reported its outcome before the affected execution is represented as authorized. A
+ * rejected durable write therefore blocks execution instead of letting it proceed unrecorded. A
+ * synchronous-only contract could not report a remote write's outcome at all, so it could not
+ * satisfy SA-LED-141 for the backends SA-LED-144 blesses.
+ *
+ * Implements SA-LED-140–146, and SA-LED-141 and SA-LED-144 in particular.
  */
 export interface ActionLedger {
-  createInvocation(input: CreateInvocationInput): SteeringInvocationRecord;
-  appendPolicyDecision(recordId: string, decision: PolicyDecision): PolicyDecisionRecord;
-  setApproval(recordId: string, approval: Omit<ApprovalRecord, "updatedAt">): void;
+  createInvocation(input: CreateInvocationInput): MaybePromise<SteeringInvocationRecord>;
+  appendPolicyDecision(
+    recordId: string,
+    decision: PolicyDecision,
+  ): MaybePromise<PolicyDecisionRecord>;
+  setApproval(recordId: string, approval: Omit<ApprovalRecord, "updatedAt">): MaybePromise<void>;
   updateStep(
     recordId: string,
     stepId: string,
     patch: Partial<Omit<ActionStepRecord, "stepId" | "order" | "actionId">>,
-  ): ActionStepRecord;
-  attachUndoHandle(recordId: string, stepId: string, handle: UndoHandleRecord): void;
+  ): MaybePromise<ActionStepRecord>;
+  attachUndoHandle(recordId: string, stepId: string, handle: UndoHandleRecord): MaybePromise<void>;
   updateUndoHandle(
     recordId: string,
     stepId: string,
     handleId: string,
     patch: Partial<UndoHandleRecord>,
-  ): UndoHandleRecord;
+  ): MaybePromise<UndoHandleRecord>;
   appendDisclosure(
     recordId: string,
     disclosure: Omit<DisclosureRecord, "disclosureId">,
-  ): DisclosureRecord;
+  ): MaybePromise<DisclosureRecord>;
   appendUndoAttempt(
     recordId: string,
     attempt: Omit<UndoAttemptRecord, "undoAttemptId" | "startedAt">,
-  ): UndoAttemptRecord;
+  ): MaybePromise<UndoAttemptRecord>;
   updateUndoAttempt(
     recordId: string,
     undoAttemptId: string,
     patch: Partial<Omit<UndoAttemptRecord, "undoAttemptId" | "startedAt">>,
-  ): UndoAttemptRecord;
-  requireRecord(recordId: string): SteeringInvocationRecord;
+  ): MaybePromise<UndoAttemptRecord>;
+  requireRecord(recordId: string): MaybePromise<SteeringInvocationRecord>;
   /** Returns the ordered ledger read model for application-owned trail UI. */
-  getRecords(): SteeringInvocationRecord[];
+  getRecords(): MaybePromise<SteeringInvocationRecord[]>;
   /** Notifies consumers whenever the readable ledger state changes. */
   subscribe(listener: () => void): () => void;
 }
@@ -435,9 +449,62 @@ export function extractLedgerTrace(
   });
 }
 
-function clone<T>(value: T): T {
-  return value === undefined || value === null ? value : (JSON.parse(JSON.stringify(value)) as T);
+/**
+ * Raised when a value the runtime must preserve cannot be copied without corrupting it.
+ *
+ * A silent degradation here is worse than a failure: a snapshot whose `Date` came back as a string
+ * is not a restoration mechanism "in a form usable by later undo behavior" (SA-EXEC-010), and undo
+ * built on it would report success while failing to fully reverse the step (SA-EXEC-087). Surfacing
+ * a legible, attributable error keeps that from happening quietly.
+ *
+ * Implements SA-EXEC-010 and SA-EXEC-087.
+ */
+export class RecordedValueCloneError extends Error {
+  /** Stable machine-readable code for runtime and host error mapping. */
+  readonly code = "recorded_value_not_cloneable";
+  /** Creates a legible clone failure naming the offending value's type. Implements SA-EXEC-010. */
+  constructor(value: unknown, cause: unknown) {
+    super(
+      `Could not copy a ${describeValue(value)} value for the steering record: it is not ` +
+        `structured-cloneable. Recorded values and snapshots must round-trip without corruption, ` +
+        `so it was rejected rather than silently degraded. Pass a cloneable representation ` +
+        `instead. Cause: ${cause instanceof Error ? cause.message : String(cause)}`,
+      { cause },
+    );
+    this.name = "RecordedValueCloneError";
+  }
 }
+
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value !== "object") return typeof value;
+  return value.constructor?.name ?? "object";
+}
+
+/**
+ * Deep-copies a value the runtime must preserve, without the corruption of a JSON round-trip.
+ *
+ * `JSON.parse(JSON.stringify(v))` turns `Date` into a string, `Map`/`Set` into `{}`, drops
+ * `undefined`, and throws outright on `BigInt` — an ordinary database primary key. `structuredClone`
+ * preserves all of those. Where a value is genuinely non-cloneable (a function, for instance) this
+ * fails loudly as a `RecordedValueCloneError` rather than storing something that no longer matches
+ * what the runtime saw.
+ *
+ * This is the shared copy helper for every value that must survive for later undo: use it instead
+ * of a local JSON round-trip.
+ *
+ * Implements SA-EXEC-010, SA-EXEC-087, and SA-LED-140.
+ */
+export function cloneRecordedValue<T>(value: T): T {
+  if (value === undefined || value === null) return value;
+  try {
+    return structuredClone(value);
+  } catch (error) {
+    throw new RecordedValueCloneError(value, error);
+  }
+}
+
+const clone = cloneRecordedValue;
 
 function redactIntent(
   intent: SteeringInvocationRecord["intent"],

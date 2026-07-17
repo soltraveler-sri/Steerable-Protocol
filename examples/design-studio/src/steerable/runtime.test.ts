@@ -264,7 +264,7 @@ describe("inline steerable proto-runtime", () => {
       copyShareAction(),
       typographyAction(),
     ]);
-    const run = engine.executeChain({
+    const run = await engine.executeChain({
       intent: "Set accent, copy link, and change typography",
       surfaceId: "editor",
       posture: "creative-tool",
@@ -289,7 +289,7 @@ describe("inline steerable proto-runtime", () => {
     expect(undoResult.disclosure).toContain("Partial undo");
     expect(store.read("design.palette")).toEqual({ accent: "#000000" });
     expect(store.read("design.typography")).toEqual({ fontPairing: "atelier" });
-    expect(run.getRecord().disclosures).toEqual(
+    expect((await run.getRecord()).disclosures).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: "partial_undo", stepIds: ["step_2"] }),
       ]),
@@ -305,7 +305,7 @@ describe("inline steerable proto-runtime", () => {
       snapshotStore: store.adapter,
       approvalHook: approval.hook,
     });
-    const approvingRun = approvingEngine.executeChain({
+    const approvingRun = await approvingEngine.executeChain({
       intent: "Change accent then export",
       surfaceId: "editor",
       posture: "creative-tool",
@@ -317,7 +317,7 @@ describe("inline steerable proto-runtime", () => {
     const pending = await approval.waitForPendingRequest();
 
     expect(pending.heldSteps.map((step) => step.actionId)).toEqual(["project.export_quota"]);
-    expect(approvingRun.getRecord().steps.map((step) => step.status)).toEqual([
+    expect((await approvingRun.getRecord()).steps.map((step) => step.status)).toEqual([
       "succeeded",
       "held",
     ]);
@@ -346,7 +346,7 @@ describe("inline steerable proto-runtime", () => {
       snapshotStore: declinedStore.adapter,
       approvalHook: declineApproval.hook,
     });
-    const declinedRun = declinedEngine.executeChain({
+    const declinedRun = await declinedEngine.executeChain({
       intent: "Change accent then export",
       surfaceId: "editor",
       posture: "creative-tool",
@@ -377,7 +377,7 @@ describe("inline steerable proto-runtime", () => {
 
   it("awaits cross-surface readiness successfully and fails legibly on timeout", async () => {
     const success = createCrossSurfaceHarness({ registerSettings: true });
-    const successRun = success.engine.executeChain({
+    const successRun = await success.engine.executeChain({
       intent: "Open settings and set the theme",
       surfaceId: "editor",
       posture: "creative-tool",
@@ -398,7 +398,7 @@ describe("inline steerable proto-runtime", () => {
     expect(success.store.read("settings.theme")).toBe("premium");
 
     const timeout = createCrossSurfaceHarness({ registerSettings: false });
-    const timeoutRun = timeout.engine.executeChain({
+    const timeoutRun = await timeout.engine.executeChain({
       intent: "Open settings and set the theme",
       surfaceId: "editor",
       posture: "creative-tool",
