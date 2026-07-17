@@ -58,6 +58,8 @@ This document intentionally defines conceptual record shapes rather than a stora
 - **SA-LED-037:** A minimal steering invocation record MUST contain disclosure metadata when any action, suffix, undo attempt, or partial undo has user-relevant limitations that would make a plain "done" or "undone" activity statement misleading.
 - **SA-LED-038:** A minimal steering invocation record MUST contain enough observation, state-reference, or result-reference metadata to extract an eval trace showing the intent, action IDs, parameters or redacted parameters, policy result, execution status, errors, repairs, and undo outcome.
 - **SA-LED-039:** A minimal steering invocation record MUST NOT require raw prompts, raw model responses, full state snapshots, latency histograms, provider trace IDs, analytics dimensions, compliance signatures, or durable storage references unless those values are required by the app's chosen storage or policy profile.
+- **SA-LED-040:** A steering invocation whose intent answers an earlier `clarification` outcome under `SA-EXEC-037` MUST contain clarification linkage identifying the invocation record that recorded the pending proposal, mirroring the repair linkage required by `SA-LED-034` at invocation scope because no step of the pending proposal executed. Linkage MUST be recorded on the resuming invocation rather than by rewriting the clarifying invocation's historical facts.
+- **SA-LED-041:** A resuming invocation MUST carry its own policy decision record under `SA-LED-035`. The policy decision recorded for the clarifying invocation MUST NOT be represented as authorizing the resuming invocation's execution, consistent with `SA-EXEC-038` and `SA-LED-053`.
 
 The following conceptual shape is illustrative:
 
@@ -69,6 +71,7 @@ type SteeringInvocationRecord = {
   surfaceRef?: string
   initiator: { kind: "user" | "system" | "external_agent"; ref?: string }
   intent: { text?: string; redactedText?: string; ref?: string }
+  clarificationOfRecordId?: string
   policyDecisions: PolicyDecisionRecord[]
   approval: ApprovalRecord
   steps: ActionStepRecord[]
@@ -200,6 +203,7 @@ The following issue-level decisions are recorded so later authors do not re-open
 4. Sensitive params are handled through redaction or stable references. Redaction cannot erase the structural facts needed for policy audit, activity, eval traces, or trusted undo.
 5. Storage depth is policy-controlled. An in-memory session ledger is conformant for a creative tool that only claims session trail and session undo; sensitive-domain or durable-audit products must choose stronger storage.
 6. Still-executing chain behavior is deliberately not specified here. The ledger records pending undo requests, current step statuses, and final reconciliation; `SA-EXEC` owns cancellation, pausing, scheduling, and surface behavior.
+7. Issue #83: clarification linkage is an invocation-scope field, not a step-scope one. `SA-LED-034`'s `repairOfStepId` links a step to the step it repairs, but a clarification blocks before any step executes, so the linkage a clarification needs is record-to-record. `SA-LED-041` then makes the stale-policy question auditable rather than only normative: a resuming invocation that lacks its own policy decision record is visibly reusing a decision made on inputs that have changed.
 
 No conflict with `SA-POL-108`, `SA-POL-109`, or `SA-DECL` undo fields was identified while writing this document.
 

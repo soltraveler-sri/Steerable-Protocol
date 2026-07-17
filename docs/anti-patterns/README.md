@@ -8,4 +8,6 @@ This is not a place for broad opinion essays or new rules. Each document should 
 
 ## Template note
 
-The six failure-mode documents use one shared template: status, related anti-patterns, what it is, why it happens, how to recognize it, what to do instead, grounding, and spec gaps surfaced. `plan-everything.md` and `unsafe-magic.md` are intentionally deeper than the others because they form the paired guardrail against ceremony and recklessness.
+The seven failure-mode documents use one shared template: status, related anti-patterns, what it is, why it happens, how to recognize it, what to do instead, grounding, and spec gaps surfaced. `plan-everything.md` and `unsafe-magic.md` are intentionally deeper than the others because they form the paired guardrail against ceremony and recklessness.
+
+The first six documents come from the north-star's anti-pattern list. `prompt-as-mechanism.md` was added from issue #83's downstream field report; it is a real failure mode observed in the wild on the same terms, and it is mapped through `docs/spec/conformance-checklist.md` section 7 like the rest.

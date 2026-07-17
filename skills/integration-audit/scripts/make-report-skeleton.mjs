@@ -21,8 +21,8 @@ if (!fs.existsSync(checklistPath)) {
 const checklist = fs.readFileSync(checklistPath, "utf8");
 const rows = parseChecklistRows(checklist);
 
-if (rows.length !== 89) {
-  fail(`Expected 89 SA-CONF rows from section 4, found ${rows.length}.`);
+if (rows.length !== 95) {
+  fail(`Expected 95 SA-CONF rows from section 4, found ${rows.length}.`);
 }
 
 const report = renderReport({ target, checklistPath, rows });
@@ -103,10 +103,10 @@ function parseChecklistRows(markdown) {
     rows.push({ id, applies, severity, requirementIds });
   }
 
-  return rows.filter((row) => {
-    const number = Number(row.id.slice("SA-CONF-".length));
-    return number >= 1 && number <= 89;
-  });
+  // Section 4 is the checklist itself, so every row parsed from it is a checklist
+  // item. SA-CONF-090 through SA-CONF-098 are framework/developer boundary
+  // requirements in section 9 and are never reached by this parser.
+  return rows;
 }
 
 function renderReport({ target, checklistPath, rows }) {

@@ -56,6 +56,8 @@ This document does not define DOM annotation tooling, screenshot capture APIs, v
 - **SA-CTX-045:** Read tool guidance assembled for agents SHOULD preserve the declaration guidance required by `SA-DECL-068`, especially when the read tool is intended to be used before proposing an action.
 - **SA-CTX-046:** If a read tool is unavailable, forbidden, or fails validation, the runtime MUST NOT simulate the query through an action executor.
 - **SA-CTX-047:** If a read tool result contradicts Rung 1 facts, the runtime SHOULD refresh the relevant facts or report the ambiguity rather than silently choose the lower-confidence value.
+- **SA-CTX-048:** A runtime assembling a read-tool result into context MUST carry the boundedness metadata required by `SA-DECL-140` with the items it qualifies, unmodified and in the same assembled result. It MUST NOT strip, flatten, summarize away, or separate that metadata from the items. If the assembly path cannot carry it, the runtime MUST NOT expose that result at Rung 2.
+- **SA-CTX-049:** Where the runtime or the product itself derives a count, total, superlative, completeness claim, or population statement from a read-tool result whose `SA-DECL-140` metadata indicates further matching items exist, it MUST use the declared total or qualify the claim as covering only the returned view. The returned item count MUST NOT be presented as the size of the matching set.
 
 ## 6. Rung 3: Annotated DOM Snapshot (Normative)
 
@@ -152,6 +154,7 @@ The following issue-level decisions are recorded so later authors do not re-open
 3. Freshness is defined as committed app-owned state at publication time for facts and trusted query time for read tools. The spec does not prescribe a reactive implementation mechanism.
 4. Sensitivity is handled through context permissions, redaction, and the existing `effects.sensitive` semantics for actions. This document adds no new action metadata values.
 5. Screenshot and vision fallback is never mandatory. If declared context is insufficient and lower rungs are forbidden, clarification, refusal, or hand-off is conformant.
+6. Issue #83: bounded read-tool results are governed at the contract and at the assembly path, not by instructing the model. A page presented as a population is a model-output failure, and no requirement here can make model prose conformant by fiat; what a runtime does own is that the declaration carries `hasMore`-and-total metadata (`SA-DECL-140`), that assembly delivers it intact next to the items (`SA-CTX-048`), and that any count the product itself renders uses the declared total rather than the page length (`SA-CTX-049`). Once the metadata is present and adjacent, agent-facing guidance under `SA-DECL-068` is a hint over a sound contract rather than the mechanism; see `docs/anti-patterns/prompt-as-mechanism.md`.
 
 No conflict with the north-star, `SA-DECL`, or `SA-POL` was identified while writing this document.
 
@@ -176,7 +179,7 @@ This document was checked against the issue acceptance criteria after drafting:
 |---|---|---|
 | **SA-CTX-141** | The four ordered context rungs and their fallback relationship. | Which declared facts, read tools, annotations, or visual affordances are useful for the product. |
 | **SA-CTX-142** | That curated facts are the first rung and must remain bounded, typed, surface-scoped context under `SA-DECL`. | Which small set of surface facts best represents current product state. |
-| **SA-CTX-143** | That typed read tools are the second rung and remain side-effect-free queries outside action risk machinery. | Which parameterized product queries are worth exposing and when agent guidance should use them. |
+| **SA-CTX-143** | That typed read tools are the second rung, remain side-effect-free queries outside action risk machinery, and carry their declared boundedness into assembled context under `SA-CTX-048`. | Which parameterized product queries are worth exposing, what page size or limit each applies, and when agent guidance should use them. |
 | **SA-CTX-144** | That annotated DOM snapshots are deliberate bounded fallback, not registry capabilities or action semantics. | Whether to permit annotated DOM snapshots and which semantic elements receive stable annotations. |
 | **SA-CTX-145** | That screenshot and vision context is the final fallback and never required for conformance. | Whether screenshot or vision fallback is permitted for a surface, role, session, or environment. |
 | **SA-CTX-146** | The escalation rule: use the least raw permitted rung that satisfies the information need. | The product policy for forbidding, redacting, scoping, or auditing lower-rung context. |
