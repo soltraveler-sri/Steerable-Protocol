@@ -2,7 +2,7 @@
 
 > **Make your app steerable by agents — without handing them the browser.**
 
-Steerable is an **open standard** — colloquially, *the Steerable protocol* — for making software applications operable through natural language. An app declares its real capabilities as **typed, policy-governed actions**; users then drive the whole product by stating intent ("make the accent forest green and rebuild it"), and external agents can operate it through the same governed surface. The app never surrenders control to fragile DOM automation, and the experience never degrades into a read-only chatbot.
+Steerable is an **open standard** — colloquially, *the Steerable protocol* — for making software applications operable through natural language. An app declares its real capabilities as **typed, policy-governed actions**, so that users can drive the whole product by stating intent ("make the accent forest green and rebuild it"), and external agents can operate it through the same governed surface. The app never surrenders control to fragile DOM automation, and the experience never degrades into a read-only chatbot.
 
 Expose your product's real capabilities through typed actions, policy, and trusted execution — not a chatbot veneer, and not DOM automation.
 
@@ -38,6 +38,8 @@ These define the project's character; every document in this repo is bound by th
 ## Project status — honest version
 
 **Stage 2 is complete.** The normative specification is complete. The tested `@steerable/core` and `@steerable/react` packages have been extracted but are not published to npm; vendor them from this repository. Design Studio has migrated from its inline runtime to those packages. The agent-readable kit includes guides, conformance and eval tooling, and the retrofit skill's explicitly authorized [Full-Build Mode](./skills/retrofit/SKILL.md#full-build-mode-pre-production-targets). Both the Stage-1 retrofit gate and Stage-2 extraction gate were exercised with dated evidence in [`docs/plan/`](./docs/plan/README.md).
+
+**Scope of what ships vs. what you build.** The specification covers the full steering loop — intent routing, context, policy, execution, ledger, undo. The packages implement everything **downstream of a validated action proposal**: registry compilation, policy resolution, gated and cross-surface execution, the ledger, undo, and the ecosystem adapter that carries policy decisions into a provider tool loop. Everything **upstream** of that proposal — the model call, prompt assembly, tool-schema wiring into your provider, conversation history, and the intent router the spec mandates ([`SA-EXEC-020`–`039`](./docs/spec/execution-and-surfaces.md)) — is specified but **not shipped**: you build it against those contracts. The example's scripted router demonstrates the contract's shape, not a production model router.
 
 ## Orientation
 
