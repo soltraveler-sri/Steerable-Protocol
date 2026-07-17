@@ -64,7 +64,7 @@ Do not restate or extend checklist rules. Execute every applicable SA-CONF item 
    - Every finding must include evidence as file/line/behavior and a fix direction concrete enough that a second agent can act without re-auditing from scratch.
 
 8. Verify the report.
-   - Confirm all 89 checklist items have a result.
+   - Confirm all 95 checklist items have a result.
    - Confirm `LP-1` through `LP-5` each have a result, and that every `Pass` carries an artifact recording what was observed rather than an assertion that the code is correct.
    - Confirm every `Not applicable` live-pass check names the structural absence that justifies it, and every `Inconclusive` one names its blocker, what was attempted, and what would unblock it.
    - Confirm no conformance claim is reported as passing while any live-pass check is `Fail` or `Inconclusive`.

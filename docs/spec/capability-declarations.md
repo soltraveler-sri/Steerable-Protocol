@@ -193,7 +193,21 @@ This document references the core vocabulary in `SA-CORE` rather than redefining
 - **SA-DECL-135:** Door-two addition (issue #9): Registry compilation MUST preserve the materialized `externalExposure` value for every action and read tool (including the `none` default for omitted declarations) in a form usable by external-bridge generation and conformance checks.
 - **SA-DECL-136:** Door-two addition (issue #9): Door-two derivation MUST consume `externalExposure` from the registry and MUST NOT infer external eligibility from title, description, guidance, risk class, effects, or external-tool configuration.
 
-## 12. North-Star Action Example (Informative)
+## 12. Read-Tool Result Boundedness Addendum (Normative)
+
+`SA-DECL-060` through `SA-DECL-069` require read tools to be typed and side-effect-free, and `SA-CTX-043` requires their results to be bounded. Bounding is what creates the hazard this section closes: a result that is a page, a slice, or a sample of a larger collection is indistinguishable from the whole collection unless the declaration says otherwise.
+
+- **SA-DECL-140:** Issue #83 addition: When a read tool's `query` can return a truncated, paged, limited, sampled, or otherwise partial view of a larger matching set, its declared result contract MUST carry that boundedness explicitly. At minimum it MUST carry whether further matching items exist beyond the returned view, and either the total count of matching items or an explicit value meaning the total is unknown.
+- **SA-DECL-141:** Issue #83 addition: The boundedness metadata required by `SA-DECL-140` MUST be part of the read tool's strict typed result contract under `SA-DECL-016`. It MUST NOT be left to `description`, `guidance`, prose in the query's output, a convention outside the declaration, or the agent's inference, consistent with `SA-DECL-093` and `SA-DECL-095`.
+- **SA-DECL-142:** Issue #83 addition: A read tool whose `query` always returns the complete matching set for its parameters MAY omit the metadata required by `SA-DECL-140`; omission MUST mean the result is complete for those parameters, and a read tool that applies any limit, page size, cursor, or slice MUST NOT omit it.
+
+| Field | Required? | Omission semantics |
+|---|---:|---|
+| Boundedness metadata in the result contract | Required when the query can return a partial view | Omission means the result is the complete matching set for the given parameters. |
+| More-available indicator | Required by `SA-DECL-140` when metadata is present | Non-conformant if omitted from a partial-view result contract. |
+| Total count of matching items | Required by `SA-DECL-140` when metadata is present | Use an explicit unknown-total value rather than omitting the field or reporting the returned item count. |
+
+## 13. North-Star Action Example (Informative)
 
 The following example is reproduced from the north-star's core abstraction. It is conformant with this document because it declares a stable action ID, strict typed parameters, required state keys, policy metadata, confirmation posture, preconditions, trusted execution, optional undo and observe hooks, and model-facing guidance and examples.
 
@@ -240,7 +254,7 @@ Field-by-field conformance notes:
 7. `guidance` and `examples` provide the model-facing knowledge required to derive prompts and fixtures.
 8. `externalExposure` is omitted, so registry compilation materializes `none`: the action is not eligible for door-two generation unless the developer marks it `eligible`.
 
-## 13. Minimal Viable Declaration Example (Informative)
+## 14. Minimal Viable Declaration Example (Informative)
 
 This is the smallest honest action declaration shape: no inputs, no state dependencies, no side effects, no workflow assumptions, one trusted executor, and enough guidance/example material for generated prompts, docs, and fixtures.
 
@@ -264,7 +278,7 @@ defineAction({
 })
 ```
 
-## 14. Resolution Notes for This Declaration Document (Informative)
+## 15. Resolution Notes for This Declaration Document (Informative)
 
 The following issue-level decisions are recorded so later authors do not re-open them accidentally:
 
@@ -278,7 +292,7 @@ The following issue-level decisions are recorded so later authors do not re-open
 
 No conflict with the north-star was identified while writing this document.
 
-## 15. Framework Decides vs. Developer Decides (Normative)
+## 16. Framework Decides vs. Developer Decides (Normative)
 
 - **SA-DECL-120:** This declaration specification MUST preserve the framework/developer boundary in Table 1.
 

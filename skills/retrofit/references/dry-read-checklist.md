@@ -35,6 +35,6 @@ Run this before declaring the skill-driven task done or before handing the work 
 - Supporting files are referenced from `SKILL.md` and load only when needed.
 - The audit skill's fix-ready finding fields are consumed directly.
 - Phase 6 is explicit that retrofit supplies the separate ask for fixing confirmed in-scope blockers from report-only audit findings.
-- Eval-authoring is a definition-of-done step, not optional polish.
+- Eval-authoring is mandatory, not optional polish; the definition-of-done step is the integration-audit live pass, and a green fixture run is not a conformance verdict.
 - Fresh targets implement the `evals/README.md#target-adapter-interface` contract without changing `evals/run-fixtures.mjs`.
 - Final reporting forbids unearned minimal conformance claims.

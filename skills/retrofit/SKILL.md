@@ -65,6 +65,16 @@ Abort if required Steerable authority docs are missing, the target app cannot be
 
 Run the read-only discovery procedure in `docs/guides/retrofit-existing-app.md#inventory-procedure`, including its risk-classification walkthrough for every candidate action. Package the handoff inventory using `references/review-packet-template.md`: product skeleton, candidate actions, facts, read tools, risky operations, undo/history, surfaces, existing assistant/tool layers, validation seams, and evidence paths. Track `existing_integration_state` as `absent`, `partial`, or `complete`; an existing layer is evidence to converge or repair, not permission to rewrite broadly.
 
+Answer these runtime-architecture questions in the same inventory, before any declaration is designed. They are cheap now and expensive to reverse once declarations exist, and none of them is answered by the capability inventory:
+
+- **Where does the chat turn run?** Client, server, edge, worker. Which process calls the model, and which one holds the registry it derives tool schemas from.
+- **Where does the session host mount?** Name the component, layout, or scope that owns the panel, the activity trail, pending continuations, and undo scope — and verify it encloses the app's navigable region. A host mounted inside a per-page shell is unmade by every route change, which makes `SA-CONF-066` unsatisfiable by construction while it still reads clean statically. `SA-EXEC-180` and `SA-CONF-099` are the contract.
+- **Is the ledger durable, and does undo survive the round trip?** Session memory, browser storage, or a real store. If handles must serialize, they cannot be closures. `SA-CONF-073`, `SA-CONF-079`.
+- **How is the registry scoped?** Per request, per user, per session, or one process-wide singleton. A mutable singleton on a server makes one user's surface liveness visible to another's concurrent request and corrupts the `SA-POL-105` availability input.
+- **Where do terminal errors land?** Name each steering process's operator diagnostic stream. `SA-CONF-104`.
+
+Record each answer with evidence in the review packet. An unanswered question is an open question for Phase 4, not an assumption.
+
 Abort if the inventory cannot produce reproducible evidence under `SA-CONF-005` and `SA-CONF-098`, if the target cannot run or be inspected enough to validate the claimed scope, or if the only mutation paths are model/DOM/external authority with no app-owned executor seam.
 
 ### 3. Fit Assessment
@@ -75,7 +85,7 @@ Abort on `does not fit`: produce the no-go report, blocked `SA-CONF-*` items, pr
 
 ### 4. Integration Plan And Mandatory Stop
 
-Before editing code, return the review packet from `references/review-packet-template.md`. The plan must order work as facts/read tools, safe reversible actions, one gated action, then posture selection. Map every step to `SA-CONF-*` self-checks, name files likely touched, validation commands, open questions, and deferred scope. End with the exact stop statement from the template and wait.
+Before editing code, return the review packet from `references/review-packet-template.md`. The plan must settle the Phase-2 runtime-architecture answers first — where the chat turn runs, where the session host mounts, ledger durability and undo serializability, registry scoping, and where terminal errors land — because declarations built over the wrong answer are expensive to unwind. Then order the capability work as facts/read tools, safe reversible actions, one gated action, then posture selection. Map every step to `SA-CONF-*` self-checks, name files likely touched, validation commands, open questions, and deferred scope. End with the exact stop statement from the template and wait.
 
 If the user says "just do it" before this packet exists, still produce the packet and stop. An unambiguous affirmative from the human on the packet as a whole is sufficient approval. Partial approval authorizes only the approved subset; execute that subset and return the rest to Phase 4. Silence, time passing, or ambiguous responses are not approval.
 
@@ -93,9 +103,9 @@ Abort if implementation pressure expands beyond the approved scope, requires a s
 
 Run the target's agreed tests first. Then invoke `skills/integration-audit/` against the implemented scope and consume its findings directly: `id`, `severity`, `result`, `SA-CONF`, `evidence`, `fix_direction`, and `verification` are the fix queue. Integration audit is report-only unless the user separately asks for fixes; retrofit Phase 6 is that separate ask for confirmed in-scope blockers and claim-blocking inconclusive items. Fix those findings inside the approved scope; file or report out-of-scope findings without hiding them. Re-run the relevant audit checks after fixes.
 
-Invoke `skills/eval-authoring/` as the definition-of-done step. Add only registry-derived fixtures that fill coverage cells, validate them, run them through the target adapter or documented wrapper, re-run the duplicate scan, and report failures faithfully. For a fresh retrofit, implement the small target adapter contract from `evals/README.md#target-adapter-interface` so the runner can execute the target fixtures: `target`, `route(fixture)`, `resolve(fixture)`, `execute(fixture)`, and `undo(fixture)`, without changing `evals/run-fixtures.mjs`. Use `references/dry-read-checklist.md` before declaring done.
+Invoke `skills/eval-authoring/` for the deterministic fixture suite. The definition-of-done step is the integration-audit live pass (`skills/integration-audit/references/live-pass.md`); a green fixture run is not a conformance verdict. Add only registry-derived fixtures that fill coverage cells, validate them, run them through the target adapter or documented wrapper, re-run the duplicate scan, and report failures faithfully. For a fresh retrofit, implement the small target adapter contract from `evals/README.md#target-adapter-interface` so the runner can execute the target fixtures: `target`, `route(fixture)`, `resolve(fixture)`, `execute(fixture)`, and `undo(fixture)`, without changing `evals/run-fixtures.mjs`. Use `references/dry-read-checklist.md` before declaring done.
 
-Abort if audit or eval tooling cannot run, if a correct fixture exposes a product/runner bug outside the approved slice, or if a Minimal+ blocker remains. Report the blocker, commands attempted, evidence, and the next fix path.
+Abort if audit or eval tooling cannot run, if the target cannot be driven so that the live pass reports `Inconclusive` rather than `complete`, if a correct fixture exposes a product/runner bug outside the approved slice, or if a Minimal+ blocker remains. Report the blocker, commands attempted, evidence, and the next fix path. An `Inconclusive` live pass is an honest, complete outcome: report what is unproven and what would prove it; never substitute a green test, eval, or build run for it.
 
 ## Final Report
 
@@ -108,4 +118,4 @@ Report only after Phase 6 or an abort. Include:
 - Eval-authoring summary with fixture IDs, coverage cells, duplicate-scan result, and runner result.
 - Deferred scope and open issues.
 
-Never claim minimal conformance unless the applicable `SA-CONF` Minimal+ MUST items pass for the stated scope.
+Never claim minimal conformance unless the applicable `SA-CONF` Minimal+ MUST items pass for the stated scope **and** the integration audit reports `live_pass: complete`. A passing static read with the live pass `partial`, `not run`, or `Inconclusive` is an unproven claim, not a minimal one.
