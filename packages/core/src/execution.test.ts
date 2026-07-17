@@ -5,6 +5,7 @@ import {
   RegistryCompileError,
   RegistrySurfaceReadiness,
   CapabilityRegistry,
+  createLivenessState,
   createMemorySnapshotStore,
   createStrictObjectSchema,
   defineAction,
@@ -604,5 +605,137 @@ describe("B2 — gate/undo cancellation race (SA-EXEC-088, SA-LED-003)", () => {
     // fabricated decline the user never made.
     expect(done.record.approval.status).toBe("canceled");
     expect(done.record.steps[0].status).toBe("canceled");
+  });
+});
+
+// B1 (issue #83 §7): surface liveness consumed by policy resolution and by the cross-surface
+// boundary re-check MUST be scoped to the requesting principal (SA-DECL-097). The engine resolves
+// policy and re-validates availability against one per-request view; these prove one principal's
+// registration never authorizes another's invocation, and that the SPA default path is unchanged.
+describe("B1 — request-scoped availability in the execution engine (SA-DECL-097)", () => {
+  it("refuses an action for a principal whose view lacks the surface, even after another registered it on the shared instance", async () => {
+    const act = action("admin.purge_accounts");
+    const reg = new CapabilityRegistry({
+      actions: [act],
+      surfaces: [
+        defineSurface({
+          id: "admin",
+          title: "admin",
+          description: "admin surface",
+          capabilities: [act.id],
+        }),
+      ],
+    });
+    // Principal A registered the surface on the SHARED instance — the module-singleton hoist hazard.
+    reg.registerSurface("admin");
+    const engine = new ExecutionEngine({ registry: reg, ledger: new InMemoryLedger() });
+
+    // Principal B executes with its own per-request view, where "admin" is not live.
+    const refused = await engine.executeAction({
+      intent: "purge",
+      surfaceId: "admin",
+      actionId: act.id,
+      params: { value: "x" },
+      posture: "creative-tool",
+      availability: reg.withLiveness(createLivenessState()),
+    });
+    // Chain policy sees the action unavailable in B's view → refused. Pre-fix, the engine read the
+    // shared instance liveness (admin live via A) and would have executed and succeeded.
+    expect(refused.status).toBe("refused");
+
+    // Principal A, with a view where "admin" is live, succeeds against the same shared registry.
+    const stateA = createLivenessState();
+    stateA.liveSurfaces.add("admin");
+    const ok = await engine.executeAction({
+      intent: "purge",
+      surfaceId: "admin",
+      actionId: act.id,
+      params: { value: "x" },
+      posture: "creative-tool",
+      availability: reg.withLiveness(stateA),
+    });
+    expect(ok.status).toBe("succeeded");
+  });
+
+  it("uses the registry default view when no per-request availability is supplied (SPA unchanged)", async () => {
+    const act = action("admin.purge_accounts");
+    const reg = new CapabilityRegistry({
+      actions: [act],
+      surfaces: [
+        defineSurface({
+          id: "admin",
+          title: "admin",
+          description: "admin surface",
+          capabilities: [act.id],
+        }),
+      ],
+    });
+    const engine = new ExecutionEngine({ registry: reg, ledger: new InMemoryLedger() });
+
+    // No view supplied: availability defaults to the registry's instance liveness, exactly as before.
+    const before = await engine.executeAction({
+      intent: "purge",
+      surfaceId: "admin",
+      actionId: act.id,
+      params: { value: "x" },
+      posture: "creative-tool",
+    });
+    expect(before.status).toBe("refused");
+
+    reg.registerSurface("admin");
+    const after = await engine.executeAction({
+      intent: "purge",
+      surfaceId: "admin",
+      actionId: act.id,
+      params: { value: "x" },
+      posture: "creative-tool",
+    });
+    expect(after.status).toBe("succeeded");
+  });
+
+  it("runs a cross-surface chain entirely on the per-request view, preserving the B11 boundary re-check (SA-DECL-097)", async () => {
+    const first = action("home.write_note");
+    const second = action("settings.save_note");
+    const reg = new CapabilityRegistry({
+      actions: [first, second],
+      surfaces: [
+        defineSurface({
+          id: "home",
+          title: "home",
+          description: "home surface",
+          capabilities: [first.id],
+        }),
+        defineSurface({
+          id: "settings",
+          title: "settings",
+          description: "settings surface",
+          capabilities: [second.id],
+        }),
+      ],
+    });
+    // Neither surface is registered on the shared instance; only this principal's view sees them.
+    const state = createLivenessState();
+    state.liveSurfaces.add("home");
+    state.liveSurfaces.add("settings");
+    const engine = new ExecutionEngine({ registry: reg, ledger: new InMemoryLedger() });
+
+    const run = await engine.executeChain({
+      intent: "note then save",
+      surfaceId: "home",
+      posture: "creative-tool",
+      availability: reg.withLiveness(state),
+      steps: [
+        { actionId: first.id, params: { value: "a" } },
+        { actionId: second.id, params: { value: "b" }, targetSurfaceId: "settings" },
+      ],
+    });
+    const result = await run.done;
+
+    // The cross-surface step's plan-time availability deferred to declared membership (B11), the
+    // readiness wait resolved immediately from the view, and the boundary re-check honored the view
+    // — so the whole chain ran off the per-request view. The shared instance never saw the surfaces.
+    expect(result.status).toBe("succeeded");
+    expect(reg.isSurfaceLive("home")).toBe(false);
+    expect(reg.isSurfaceLive("settings")).toBe(false);
   });
 });

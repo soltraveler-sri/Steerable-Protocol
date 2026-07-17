@@ -1,4 +1,5 @@
 import {
+  type PolicyAvailability,
   type PolicyDecision,
   type PolicyInputs,
   type PosturePreset,
@@ -23,6 +24,15 @@ export interface EcosystemToolContext extends Omit<
   "posture" | "currentSurface" | "availability"
 > {
   surfaceId: SurfaceId;
+  /**
+   * Per-invocation availability view consulted by policy resolution. Optional and backward
+   * compatible: when omitted, the adapter falls back to the registry's own default view, so an
+   * existing single-principal (SPA) caller is unchanged. A server that hoists one compiled registry
+   * to a module singleton passes a per-request view — `registry.withLiveness(perRequestState)` — so
+   * one principal's live surfaces never make a capability available for another's invocation
+   * (`SA-DECL-097`). Implements SA-DECL-097 and SA-POL-104–105.
+   */
+  availability?: PolicyAvailability;
 }
 
 /** Untrusted ecosystem tool proposal submitted for validation and policy. Implements SA-POL-100–101. */
@@ -229,7 +239,10 @@ export function createEcosystemAdapter(
       ...context,
       posture,
       currentSurface: context.surfaceId,
-      availability: registry,
+      // Per-invocation view when the caller supplies one (server, module-singleton registry);
+      // otherwise the registry's own default view, which is the pre-existing SPA behavior
+      // (`availability: registry` read off shared instance state). Implements SA-DECL-097.
+      availability: context.availability ?? registry.defaultView,
     });
     if (policy.finalMode === "Refuse / hand off") {
       return {

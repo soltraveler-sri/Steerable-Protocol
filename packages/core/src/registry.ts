@@ -671,10 +671,163 @@ function deepEquals(left: unknown, right: unknown): boolean {
 }
 
 /**
+ * Mutable surface-liveness and precondition state for one requesting session or principal.
+ *
+ * The compiled registry (IDs, schemas, metadata, surface capability lists) is immutable and safe to
+ * share across principals; only this state is per-principal. Isolating it is what `SA-DECL-097`
+ * requires: on a shared-process host that compiles the registry once, one principal's live surfaces
+ * and satisfied predicates MUST NOT leak into another principal's availability queries or policy
+ * resolution. A server adopter builds one `LivenessState` per request, populates it for that
+ * request's principal, and reads availability through {@link CapabilityRegistry.withLiveness}.
+ *
+ * Implements SA-DECL-084–085 and SA-DECL-097.
+ */
+export interface LivenessState {
+  /** Surfaces currently live for this principal. */
+  liveSurfaces: Set<SurfaceId>;
+  /** Non-surface host predicates currently satisfied for this principal. */
+  satisfiedPredicates: Set<string>;
+}
+
+/** Creates an empty per-principal {@link LivenessState}. Implements SA-DECL-097. */
+export function createLivenessState(): LivenessState {
+  return { liveSurfaces: new Set<SurfaceId>(), satisfiedPredicates: new Set<string>() };
+}
+
+/**
+ * The liveness-dependent availability reads of the registry, scoped to one {@link LivenessState}.
+ *
+ * Every method here answers "is this live/available/satisfied?" against a specific principal's
+ * liveness state rather than shared instance state. Policy resolution (`SA-POL-105`) and execution
+ * consume this view so that surface liveness and precondition state are principal-scoped per
+ * `SA-DECL-097`. The compiled, immutable declaration data (schemas, metadata, surface membership)
+ * is read straight from the registry and is identical for every view.
+ *
+ * Implements SA-DECL-085 and SA-DECL-097.
+ */
+export interface RegistryAvailabilityView {
+  /** Reports current surface liveness for this principal. Implements SA-DECL-084–086. */
+  isSurfaceLive(id: SurfaceId): boolean;
+  /** Evaluates one surface or host predicate for this principal. Implements SA-DECL-045 and SA-DECL-085. */
+  isPreconditionSatisfied(token: string): boolean;
+  /** Evaluates conjunctive capability preconditions for this principal. Implements SA-DECL-045 and SA-DECL-085. */
+  arePreconditionsSatisfied(preconditions: readonly string[]): boolean;
+  /** Checks whether a surface declares a capability (liveness-independent). Implements SA-DECL-083. */
+  isCapabilityOnSurface(capabilityId: CapabilityId, surfaceId: SurfaceId): boolean;
+  /** Checks live, scoped action availability for this principal. Implements SA-DECL-085. */
+  isActionAvailableOnSurface(actionId: CapabilityId, surfaceId: SurfaceId): boolean;
+  /** Checks live, scoped read-tool availability for this principal. Implements SA-DECL-085. */
+  isReadToolAvailableOnSurface(readToolId: CapabilityId, surfaceId: SurfaceId): boolean;
+  /** Lists live capabilities for a surface for this principal. Implements SA-DECL-085 and SA-DECL-091. */
+  getLiveCapabilities(surfaceId: SurfaceId): CompiledCapability[];
+  /** Lists live actions for a surface for this principal. Implements SA-DECL-085 and SA-DECL-091. */
+  getLiveActions(surfaceId: SurfaceId): AnyCompiledActionDeclaration[];
+  /** Lists live read tools for a surface for this principal. Implements SA-DECL-085 and SA-DECL-091. */
+  getLiveReadTools(surfaceId: SurfaceId): CompiledReadToolDeclaration[];
+  /** Lists live facts for a surface for this principal. Implements SA-DECL-071, SA-DECL-083, and SA-DECL-085. */
+  getLiveFacts(surfaceId: SurfaceId): FactsDeclaration[];
+}
+
+/**
+ * A {@link RegistryAvailabilityView} over one {@link LivenessState}.
+ *
+ * Liveness and precondition answers come from the supplied `state`; all immutable declaration data
+ * (surface membership, action preconditions, the capability collections) is read from the registry,
+ * so two views over the same registry differ only in which surfaces and predicates they consider
+ * live. This is the mechanism behind `SA-DECL-097`: the registry hands out one view per principal
+ * instead of exposing shared mutable liveness. Implements SA-DECL-085 and SA-DECL-097.
+ */
+class LivenessView implements RegistryAvailabilityView {
+  constructor(
+    private readonly registry: CapabilityRegistry,
+    private readonly state: LivenessState,
+  ) {}
+
+  isSurfaceLive(id: SurfaceId): boolean {
+    return this.state.liveSurfaces.has(id);
+  }
+
+  isPreconditionSatisfied(token: string): boolean {
+    return token.startsWith("surface:")
+      ? this.state.liveSurfaces.has(token.slice("surface:".length))
+      : this.state.satisfiedPredicates.has(token);
+  }
+
+  arePreconditionsSatisfied(preconditions: readonly string[]): boolean {
+    return preconditions.every((token) => this.isPreconditionSatisfied(token));
+  }
+
+  isCapabilityOnSurface(capabilityId: CapabilityId, surfaceId: SurfaceId): boolean {
+    return this.registry.isCapabilityOnSurface(capabilityId, surfaceId);
+  }
+
+  isActionAvailableOnSurface(actionId: CapabilityId, surfaceId: SurfaceId): boolean {
+    const action = this.registry.getAction(actionId);
+    return Boolean(
+      action &&
+      this.state.liveSurfaces.has(surfaceId) &&
+      this.registry.isCapabilityOnSurface(actionId, surfaceId) &&
+      this.arePreconditionsSatisfied(action.preconditions),
+    );
+  }
+
+  isReadToolAvailableOnSurface(readToolId: CapabilityId, surfaceId: SurfaceId): boolean {
+    const readTool = this.registry.getReadTool(readToolId);
+    return Boolean(
+      readTool &&
+      this.state.liveSurfaces.has(surfaceId) &&
+      this.registry.isCapabilityOnSurface(readToolId, surfaceId) &&
+      this.arePreconditionsSatisfied(readTool.preconditions),
+    );
+  }
+
+  getLiveCapabilities(surfaceId: SurfaceId): CompiledCapability[] {
+    if (!this.state.liveSurfaces.has(surfaceId)) return [];
+    return this.registry.getAllCapabilities().filter((capability) => {
+      if (!this.registry.isCapabilityOnSurface(capability.id, surfaceId)) return false;
+      if ("preconditions" in capability)
+        return this.arePreconditionsSatisfied(capability.preconditions);
+      return capability.surface === surfaceId;
+    });
+  }
+
+  getLiveActions(surfaceId: SurfaceId): AnyCompiledActionDeclaration[] {
+    return this.registry
+      .getAllActions()
+      .filter((action) => this.isActionAvailableOnSurface(action.id, surfaceId));
+  }
+
+  getLiveReadTools(surfaceId: SurfaceId): CompiledReadToolDeclaration[] {
+    return this.registry
+      .getAllReadTools()
+      .filter((readTool) => this.isReadToolAvailableOnSurface(readTool.id, surfaceId));
+  }
+
+  getLiveFacts(surfaceId: SurfaceId): FactsDeclaration[] {
+    return this.registry
+      .getAllFacts()
+      .filter(
+        (facts) =>
+          facts.surface === surfaceId &&
+          this.state.liveSurfaces.has(surfaceId) &&
+          this.registry.isCapabilityOnSurface(facts.id, surfaceId),
+      );
+  }
+}
+
+/**
  * Compiles declarations into the single runtime source of capability truth.
  * Construction validates IDs, required metadata, schemas, value sets, and surface references;
  * runtime queries preserve declaration semantics for policy, execution, evals, and bridges.
- * Implements SA-DECL-090–096 and SA-DECL-130–136.
+ *
+ * Surface liveness and precondition state are held as mutable per-instance sets that back the
+ * registry's own default availability view (the SPA path: one process, one principal, calling
+ * `registerSurface`/`setPrecondition` directly). A server that compiles the registry once and
+ * serves many principals MUST NOT read availability off that shared instance state; it obtains a
+ * per-request {@link RegistryAvailabilityView} from {@link withLiveness} so one principal's live
+ * surfaces never satisfy another principal's availability (`SA-DECL-097`).
+ *
+ * Implements SA-DECL-090–096, SA-DECL-097, and SA-DECL-130–136.
  */
 export class CapabilityRegistry {
   private readonly actions = new Map<CapabilityId, AnyCompiledActionDeclaration>();
@@ -684,6 +837,17 @@ export class CapabilityRegistry {
   private readonly liveSurfaces = new Set<SurfaceId>();
   private readonly satisfiedPredicates = new Set<string>();
   private readonly listeners = new Set<() => void>();
+  /**
+   * The default availability view over this registry's own instance liveness state. The mutators
+   * (`registerSurface`, `deregisterSurface`, `setPrecondition`) and this view share the same `Set`
+   * instances, so the SPA path — register on the instance, read through the registry — is
+   * unchanged. Server code that needs per-principal isolation uses {@link withLiveness} instead.
+   * Implements SA-DECL-097.
+   */
+  private readonly defaultLivenessView: RegistryAvailabilityView = new LivenessView(this, {
+    liveSurfaces: this.liveSurfaces,
+    satisfiedPredicates: this.satisfiedPredicates,
+  });
 
   /** Compiles and validates the supplied declarations. Implements SA-DECL-090–096. */
   constructor(declarations: RegistryDeclarations = {}) {
@@ -692,6 +856,28 @@ export class CapabilityRegistry {
     for (const facts of declarations.facts ?? []) this.compileFacts(facts);
     for (const surface of declarations.surfaces ?? []) this.compileSurface(surface);
     this.validateReferences();
+  }
+
+  /**
+   * Returns a {@link RegistryAvailabilityView} scoped to a caller-owned {@link LivenessState}.
+   *
+   * This is the request-scoped read path a server adopter falls into: compile the registry once,
+   * build one `LivenessState` per request, and answer availability and policy through the returned
+   * view. Because liveness comes from the supplied state and not from the shared instance sets, one
+   * principal's surface registration or satisfied precondition can never make a capability available
+   * for another principal's invocation. Implements SA-DECL-085 and SA-DECL-097.
+   */
+  withLiveness(state: LivenessState): RegistryAvailabilityView {
+    return new LivenessView(this, state);
+  }
+
+  /**
+   * The registry's own availability view over its instance liveness state — the default consulted by
+   * policy and execution when no per-request view is supplied, preserving the single-principal SPA
+   * path unchanged. Implements SA-DECL-097.
+   */
+  get defaultView(): RegistryAvailabilityView {
+    return this.defaultLivenessView;
   }
 
   /** Returns a compiled action by stable ID. Implements SA-DECL-091–092. */
@@ -769,9 +955,9 @@ export class CapabilityRegistry {
     this.emit();
   }
 
-  /** Reports current surface liveness. Implements SA-DECL-084–086. */
+  /** Reports current surface liveness on the default view. Implements SA-DECL-084–086. */
   isSurfaceLive(id: SurfaceId): boolean {
-    return this.liveSurfaces.has(id);
+    return this.defaultLivenessView.isSurfaceLive(id);
   }
 
   /** Updates a host-known availability predicate. Implements SA-DECL-045 and SA-DECL-085. */
@@ -787,78 +973,53 @@ export class CapabilityRegistry {
     return () => this.listeners.delete(listener);
   }
 
-  /** Evaluates one surface or host predicate. Implements SA-DECL-045 and SA-DECL-085. */
+  /** Evaluates one surface or host predicate on the default view. Implements SA-DECL-045 and SA-DECL-085. */
   isPreconditionSatisfied(token: string): boolean {
-    return token.startsWith("surface:")
-      ? this.liveSurfaces.has(token.slice("surface:".length))
-      : this.satisfiedPredicates.has(token);
+    return this.defaultLivenessView.isPreconditionSatisfied(token);
   }
 
-  /** Evaluates conjunctive capability preconditions. Implements SA-DECL-045 and SA-DECL-085. */
+  /** Evaluates conjunctive capability preconditions on the default view. Implements SA-DECL-045 and SA-DECL-085. */
   arePreconditionsSatisfied(preconditions: readonly string[]): boolean {
-    return preconditions.every((token) => this.isPreconditionSatisfied(token));
+    return this.defaultLivenessView.arePreconditionsSatisfied(preconditions);
   }
 
-  /** Checks whether a surface declares a capability. Implements SA-DECL-083 and SA-DECL-085. */
+  /**
+   * Checks whether a surface declares a capability. Liveness-independent: it reads only the compiled,
+   * immutable surface membership, so it is identical for every principal and lives on the registry
+   * itself rather than a per-principal view. Implements SA-DECL-083 and SA-DECL-085.
+   */
   isCapabilityOnSurface(capabilityId: CapabilityId, surfaceId: SurfaceId): boolean {
     return this.surfaces.get(surfaceId)?.capabilities.includes(capabilityId) ?? false;
   }
 
-  /** Checks live, scoped action availability. Implements SA-DECL-085. */
+  /** Checks live, scoped action availability on the default view. Implements SA-DECL-085. */
   isActionAvailableOnSurface(actionId: CapabilityId, surfaceId: SurfaceId): boolean {
-    const action = this.actions.get(actionId);
-    return Boolean(
-      action &&
-      this.liveSurfaces.has(surfaceId) &&
-      this.isCapabilityOnSurface(actionId, surfaceId) &&
-      this.arePreconditionsSatisfied(action.preconditions),
-    );
+    return this.defaultLivenessView.isActionAvailableOnSurface(actionId, surfaceId);
   }
 
-  /** Checks live, scoped read-tool availability. Implements SA-DECL-085. */
+  /** Checks live, scoped read-tool availability on the default view. Implements SA-DECL-085. */
   isReadToolAvailableOnSurface(readToolId: CapabilityId, surfaceId: SurfaceId): boolean {
-    const readTool = this.readTools.get(readToolId);
-    return Boolean(
-      readTool &&
-      this.liveSurfaces.has(surfaceId) &&
-      this.isCapabilityOnSurface(readToolId, surfaceId) &&
-      this.arePreconditionsSatisfied(readTool.preconditions),
-    );
+    return this.defaultLivenessView.isReadToolAvailableOnSurface(readToolId, surfaceId);
   }
 
-  /** Lists live capabilities for a surface. Implements SA-DECL-085 and SA-DECL-091. */
+  /** Lists live capabilities for a surface on the default view. Implements SA-DECL-085 and SA-DECL-091. */
   getLiveCapabilities(surfaceId: SurfaceId): CompiledCapability[] {
-    if (!this.liveSurfaces.has(surfaceId)) return [];
-    return this.getAllCapabilities().filter((capability) => {
-      if (!this.isCapabilityOnSurface(capability.id, surfaceId)) return false;
-      if ("preconditions" in capability)
-        return this.arePreconditionsSatisfied(capability.preconditions);
-      return capability.surface === surfaceId;
-    });
+    return this.defaultLivenessView.getLiveCapabilities(surfaceId);
   }
 
-  /** Lists live actions for a surface. Implements SA-DECL-085 and SA-DECL-091. */
+  /** Lists live actions for a surface on the default view. Implements SA-DECL-085 and SA-DECL-091. */
   getLiveActions(surfaceId: SurfaceId): AnyCompiledActionDeclaration[] {
-    return [...this.actions.values()].filter((action) =>
-      this.isActionAvailableOnSurface(action.id, surfaceId),
-    );
+    return this.defaultLivenessView.getLiveActions(surfaceId);
   }
 
-  /** Lists live read tools for a surface. Implements SA-DECL-085 and SA-DECL-091. */
+  /** Lists live read tools for a surface on the default view. Implements SA-DECL-085 and SA-DECL-091. */
   getLiveReadTools(surfaceId: SurfaceId): CompiledReadToolDeclaration[] {
-    return [...this.readTools.values()].filter((readTool) =>
-      this.isReadToolAvailableOnSurface(readTool.id, surfaceId),
-    );
+    return this.defaultLivenessView.getLiveReadTools(surfaceId);
   }
 
-  /** Lists live facts for a surface. Implements SA-DECL-071, SA-DECL-083, and SA-DECL-085. */
+  /** Lists live facts for a surface on the default view. Implements SA-DECL-071, SA-DECL-083, and SA-DECL-085. */
   getLiveFacts(surfaceId: SurfaceId): FactsDeclaration[] {
-    return [...this.facts.values()].filter(
-      (facts) =>
-        facts.surface === surfaceId &&
-        this.liveSurfaces.has(surfaceId) &&
-        this.isCapabilityOnSurface(facts.id, surfaceId),
-    );
+    return this.defaultLivenessView.getLiveFacts(surfaceId);
   }
 
   /** Parses action parameters through the declaration schema. Implements SA-DECL-035 and SA-EXEC-001. */

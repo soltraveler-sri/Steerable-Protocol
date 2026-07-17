@@ -6,6 +6,7 @@ import {
   canonicalToolNameProfile,
   compileSchema,
   createEcosystemAdapter,
+  createLivenessState,
   defineAction,
   defineSurface,
   geminiToolNameProfile,
@@ -348,6 +349,88 @@ describe("ecosystem compile-down adapter", () => {
     expect(() =>
       createEcosystemAdapter(registry, "creative-tool", { toolNames: anthropicToolNameProfile }),
     ).not.toThrow();
+  });
+
+  // B1 (issue #83 §7): a server hoists the expensive-to-compile registry to a module singleton
+  // (SA-DECL-090 calls it "the single source of truth"). One principal's `registerSurface` then
+  // makes its surface live for every concurrent request unless availability is request-scoped.
+  // SA-DECL-097 requires the isolation; this exercises the adapter seam that carries it.
+  describe("B1 — cross-principal registry isolation at the adapter seam (SA-DECL-097)", () => {
+    const adminOnly = action("admin.purge_accounts");
+    const sharedRegistry = () =>
+      new CapabilityRegistry({
+        actions: [adminOnly],
+        surfaces: [
+          defineSurface({
+            id: "admin",
+            title: "Admin",
+            description: "Admin-only panel.",
+            capabilities: [adminOnly.id],
+          }),
+        ],
+      });
+
+    it("does not let principal A's surface registration authorize principal B's invocation", () => {
+      const registry = sharedRegistry();
+      const adapter = createEcosystemAdapter(registry, "creative-tool", {
+        toolNames: canonicalToolNameProfile,
+      });
+
+      // Principal A (an admin) makes the admin surface live on the SHARED instance — exactly the
+      // hoist a server adopter falls into by reusing the SPA `registerSurface` call.
+      registry.registerSurface("admin");
+
+      // Principal B (not an admin) invokes with its OWN per-request view, in which "admin" was
+      // never registered. Isolation (the fix): B is denied because the action is not available in
+      // B's view. On the pre-fix code the adapter read shared instance state, where A's
+      // registration made "admin" live, and B was ALLOWED — the exact B1 leak.
+      const viewB = registry.withLiveness(createLivenessState());
+      expect(
+        adapter.canUseTool({
+          toolName: adminOnly.id,
+          params: { value: "x" },
+          context: { surfaceId: "admin", availability: viewB },
+        }),
+      ).toMatchObject({ status: "deny", reason: "policy_refused" });
+
+      // Principal A, invoking with its own view where "admin" IS live, is allowed.
+      const stateA = createLivenessState();
+      stateA.liveSurfaces.add("admin");
+      expect(
+        adapter.canUseTool({
+          toolName: adminOnly.id,
+          params: { value: "x" },
+          context: { surfaceId: "admin", availability: registry.withLiveness(stateA) },
+        }),
+      ).toMatchObject({ status: "allow" });
+    });
+
+    it("leaves the single-principal SPA default path unchanged when no view is supplied", () => {
+      const registry = sharedRegistry();
+      const adapter = createEcosystemAdapter(registry, "creative-tool", {
+        toolNames: canonicalToolNameProfile,
+      });
+
+      // No per-request view: the adapter falls back to the registry's default view over instance
+      // state — the pre-existing SPA behavior. Unavailable before registration, available after.
+      expect(
+        adapter.canUseTool({
+          toolName: adminOnly.id,
+          params: { value: "x" },
+          context: { surfaceId: "admin" },
+        }),
+      ).toMatchObject({ status: "deny", reason: "policy_refused" });
+
+      registry.registerSurface("admin");
+
+      expect(
+        adapter.canUseTool({
+          toolName: adminOnly.id,
+          params: { value: "x" },
+          context: { surfaceId: "admin" },
+        }),
+      ).toMatchObject({ status: "allow" });
+    });
   });
 
   it("denies unknown tools and invalid parameters before policy resolution", () => {
