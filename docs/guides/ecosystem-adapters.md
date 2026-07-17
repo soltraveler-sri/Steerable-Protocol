@@ -16,15 +16,70 @@ const tools = Object.fromEntries(Object.entries(adapter.toolSchemas).map(([name,
   needsApproval: (params: unknown) => adapter.toolApproval[name](params, context),
 }]));
 
-// In the provider's tool-call dispatch, before invoking trusted app code:
+// In the provider's tool-call dispatch, for each proposed tool call:
 const decision = adapter.canUseTool({ toolName, params, context });
 if (decision.status === "deny") return denyToolCall(decision.reason);
-if (decision.status === "needs-approval") return showApproval(decision.rationale);
-// decision.toolName is the canonical dotted declaration ID — that is what the ledger records.
-return handOffToYourTrustedExecutor(decision);
+// decision.toolName is the canonical dotted declaration ID; decision.params is already parsed.
+return dispatchToEngine(decision);
 ```
 
 The predicate only identifies a policy-derived review gate; `canUseTool` remains the enforcement callback and carries the rationale. A clean safe reversible action resolves to `allow` without approval friction. `Gated suffix`, `Plan preview`, and `Step-gated` resolve to `needs-approval`; `Refuse / hand off`, undeclared tools, and invalid parameters resolve to `deny`.
+
+## From a decision to a ledgered execution
+
+`canUseTool` is the **policy-preview seam** (`SA-EXEC-015`): a synchronous, ledger-free policy resolution that returns advice — `allow`, `needs-approval`, or `deny`. It is not execution, and its decision is not a record of anything: the adapter's own doc comment says it "never executes tools." The seam that validates, gates, records, and undoes is the **execution seam** — `ExecutionEngine`, which owns the ledger. `SA-EXEC-016` forbids letting the preview decision be the terminal record of a proposal's use, so the dispatch does not hand off to an opaque "trusted executor"; it routes the decision into the engine over the same registry:
+
+```ts
+import { ExecutionEngine } from "@steerable/core";
+
+// Construct once, next to the adapter, over the SAME registry. The engine owns the
+// ledger, the gates, and undo. Its ApprovalHook is the single consent point (below).
+const engine = new ExecutionEngine({ registry, ledger, approvalHook });
+
+async function dispatchToEngine(decision: CanUseToolDecision) {
+  // `allow` and `needs-approval` both carry the canonical action ID and parsed params,
+  // and both dispatch through the execution seam. You do NOT gate here for
+  // `needs-approval`: the engine re-resolves policy and raises the gate itself.
+  const result = await engine.executeAction({
+    intent, // the user utterance this proposal came from — kept in the trail (SA-LED-002)
+    surfaceId: context.surfaceId,
+    posture: "creative-tool",
+    actionId: decision.toolName, // canonical dotted declaration ID (SA-LED-009)
+    params: decision.params,
+    availability: context.availability, // per-request view on a shared-process host
+  });
+  // result.record is the SteeringInvocationRecord: the policy decision and the execution
+  // attempt/result, written to the ledger. That record existing is what SA-EXEC-015/016
+  // and SA-LED-002 require — the hop the adapter alone never completed.
+  return result;
+}
+```
+
+The adapter and the engine were always composable with their existing APIs; the defect closed by issue #83 (N6) was that no shown path connected them, so the only documented way to wire a model recorded nothing. `packages/core` now carries a tested composition (`composition.test.ts`) that runs a mock tool call through `canUseTool` and, on `allow`, through `engine.executeAction`, then asserts the ledger holds the invocation record.
+
+## Double gating: one consent point
+
+Two callbacks can each say "this needs approval": the adapter's `needs-approval` / `toolApproval` predicate, and the engine's `ApprovalHook`. They are **not** two prompts. The engine's `ApprovalHook` is the single consent point — the engine re-resolves policy on dispatch and raises its own gate for `Gated suffix`, `Plan preview`, and `Step-gated`. The adapter's synchronous predicate exists only for hosts whose ecosystem loop demands a pre-answer before the tool call resolves (AI-SDK-style `needsApproval`). Such a host wires its `ApprovalHook` to **present or consume that same ecosystem approval**, so one scope is never gated twice.
+
+```text
+                    proposed tool call
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  policy-preview seam  (no ledger)      │   adapter.canUseTool / toolApproval
+        │  advisory: allow / needs-approval /    │   ← host consults this only if its
+        │  deny                                   │     provider loop needs a pre-answer
+        └──────────────────────────────────────┘
+                           │  decision (allow / needs-approval)
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  execution seam  (ExecutionEngine)     │   validate → policy → GATE via the
+        │  the single ApprovalHook consent point │   one ApprovalHook → execute → record
+        │  → SteeringInvocationRecord in ledger  │   (SA-EXEC-001–009, SA-LED-002)
+        └──────────────────────────────────────┘
+```
+
+**Why route denials through the engine too.** An adapter-level `deny` that early-returns records nothing — the refused proposal vanishes. The engine, by contrast, records `unknown_action`, `invalid_params`, and policy refusals as legible `refused` outcomes with their own invocation record. Routing a denied proposal through `engine.executeAction` (which re-resolves policy and settles it `refused`) therefore gives denials the same ledger legibility as allows, which is the honest reading of `SA-LED-002`. An adopter that must answer the provider synchronously may deny at the preview seam, but should still record the refusal on the execution path rather than letting the preview decision be the proposal's only trace (`SA-EXEC-016`).
 
 Every declared action appears in `toolSchemas`. `params.jsonSchema` is required by the registry (`SA-DECL-100`), so there is no longer a class of action that compiles and is then silently absent here. The parser remains authoritative at dispatch time, so provider schemas do not replace strict validation. Read tools and the AG-UI transport seam are intentionally outside this Stage-2 adapter; MCP generation remains Stage 3.
 
