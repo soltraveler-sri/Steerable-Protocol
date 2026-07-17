@@ -21,10 +21,21 @@ export type Confirmation = "never" | "policy" | "always";
 /** Door-two eligibility declared on an action or read tool. Implements SA-DECL-130–135. */
 export type ExternalExposure = "none" | "eligible";
 
-/** Strict parser and optional generated tool schema. Implements SA-DECL-035 and SA-DECL-064. */
+/**
+ * Strict parser paired with the portable JSON Schema it validates against.
+ *
+ * `jsonSchema` is required, not optional: `SA-DECL-100` requires the model tool schema for an
+ * action to be derivable from its declaration, and a declaration whose schema cannot be
+ * serialized is a declaration no provider can call. Registry compilation rejects a missing
+ * `jsonSchema` per `SA-DECL-096` rather than compiling an action that is silently invisible to
+ * the model. Prefer {@link compileSchema}, which derives `parse` from `jsonSchema` so the two
+ * cannot disagree (`SA-DECL-093`, `SA-DECL-095`).
+ *
+ * Implements SA-DECL-016, SA-DECL-035, SA-DECL-064, and SA-DECL-100.
+ */
 export interface StrictSchema<Value> {
   parse(input: unknown): Value;
-  jsonSchema?: unknown;
+  jsonSchema: unknown;
 }
 
 /** Policy-relevant external, cost, and sensitive effects. Implements SA-DECL-040–043. */
@@ -235,12 +246,175 @@ export function defineSurface(declaration: SurfaceDeclaration): SurfaceDeclarati
   return declaration;
 }
 
-/** Builds an object parser that rejects undeclared keys. Implements SA-DECL-035 and SA-DECL-064. */
+/**
+ * The `type` values admitted by the Steerable JSON Schema Profile.
+ * Documented in `docs/guides/ecosystem-adapters.md`.
+ */
+type ProfileType = "object" | "array" | "string" | "number" | "integer" | "boolean" | "null";
+
+/** Keywords the profile admits on any node. `anyOf` is additionally barred at the root. */
+const PROFILE_UNIVERSAL_KEYWORDS: readonly string[] = [
+  "type",
+  "description",
+  "enum",
+  "const",
+  "anyOf",
+];
+
+/** Keywords the profile admits only alongside a given `type`. */
+const PROFILE_TYPE_KEYWORDS: Record<ProfileType, readonly string[]> = {
+  object: ["properties", "required", "additionalProperties"],
+  array: ["items"],
+  string: ["pattern", "format"],
+  number: [],
+  integer: [],
+  boolean: [],
+  null: [],
+};
+
+/**
+ * Why each commonly reached-for keyword sits outside the profile. Used to make the compile-time
+ * rejection teach rather than merely refuse: an adopter learns at build time instead of via a
+ * silent provider-side downgrade.
+ */
+const PROFILE_EXCLUSIONS: Record<string, string> = {
+  minimum: "numeric bounds are stripped by some providers rather than enforced",
+  maximum: "numeric bounds are stripped by some providers rather than enforced",
+  exclusiveMinimum: "numeric bounds are stripped by some providers rather than enforced",
+  exclusiveMaximum: "numeric bounds are stripped by some providers rather than enforced",
+  multipleOf: "numeric bounds are stripped by some providers rather than enforced",
+  minLength: "length bounds are stripped by some providers rather than enforced; use `pattern`",
+  maxLength: "length bounds are stripped by some providers rather than enforced; use `pattern`",
+  minItems: "array bounds are stripped by some providers rather than enforced",
+  maxItems: "array bounds are stripped by some providers rather than enforced",
+  uniqueItems: "array bounds are stripped by some providers rather than enforced",
+  $ref: "references and recursion are rejected by several providers; inline the subschema",
+  $defs: "references and recursion are rejected by several providers; inline the subschema",
+  definitions: "references and recursion are rejected by several providers; inline the subschema",
+  oneOf: "exclusive-union semantics are not portable; use `anyOf` below the root",
+  allOf: "schema composition is not portable; inline the merged subschema",
+  not: "negation is not portable",
+  if: "conditional subschemas are not portable",
+  then: "conditional subschemas are not portable",
+  else: "conditional subschemas are not portable",
+  patternProperties: "only fixed `properties` with `additionalProperties: false` are portable",
+  propertyNames: "only fixed `properties` with `additionalProperties: false` are portable",
+  dependentSchemas: "conditional subschemas are not portable",
+  dependentRequired: "conditional subschemas are not portable",
+};
+
+/**
+ * Formats the profile validates at runtime. Any other `format` is admitted but treated as an
+ * annotation only, matching JSON Schema's default, since providers vary in what they enforce.
+ */
+const PROFILE_FORMATS: Record<string, RegExp> = {
+  "date-time": /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})$/,
+  date: /^\d{4}-\d{2}-\d{2}$/,
+  time: /^\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})?$/,
+  email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+  uuid: /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/,
+  uri: /^[a-zA-Z][a-zA-Z0-9+.-]*:\S*$/,
+};
+
+type SchemaNode = Record<string, unknown>;
+
+/**
+ * Asserts that one JSON Schema lies inside the Steerable JSON Schema Profile.
+ *
+ * The profile is the intersection of what mainstream providers actually honor in a tool
+ * definition, not all of JSON Schema. A keyword outside it is rejected here, at compile time,
+ * with a message naming the keyword — because the alternative is a provider silently dropping
+ * the constraint at request time, leaving the declaration and the model's grammar disagreeing in
+ * violation of `SA-DECL-095`.
+ *
+ * The profile, and the provider evidence behind each inclusion and exclusion, is documented in
+ * `docs/guides/ecosystem-adapters.md`.
+ *
+ * Implements SA-DECL-016, SA-DECL-096, and SA-DECL-100.
+ *
+ * @param jsonSchema - The candidate schema.
+ * @param label - Declaration or field name used in error messages.
+ * @throws RegistryCompileError When the schema leaves the profile.
+ */
+export function assertSchemaProfile(jsonSchema: unknown, label = "schema"): void {
+  const root = requireSchemaNode(jsonSchema, "(root)", label);
+  if (root.type !== "object") {
+    throw schemaProfileError(
+      label,
+      "(root)",
+      'the root of a parameter schema must declare `type: "object"`, because every mainstream provider requires a tool input schema to be an object',
+    );
+  }
+  if ("anyOf" in root) {
+    throw schemaProfileError(
+      label,
+      "(root)",
+      "`anyOf` is admitted only below the root; a root-level union is not portable",
+    );
+  }
+  assertProfileNode(root, "(root)", label);
+}
+
+/**
+ * Compiles a profile-conformant JSON Schema into a strict parser paired with that schema.
+ *
+ * This is the direction information theory allows: a schema cannot be recovered from an arbitrary
+ * `parse` closure, but a validator can always be derived from a schema. Deriving `parse` removes
+ * the second, hand-maintained representation of the parameter contract that `SA-DECL-093` and
+ * `SA-DECL-095` forbid — the schema shown to the model and the parser enforced at dispatch are one
+ * source, so they cannot drift.
+ *
+ * `Params` is supplied by the caller and asserted, not inferred; the returned `parse` is what
+ * enforces the contract at runtime.
+ *
+ * Implements SA-DECL-016, SA-DECL-035, SA-DECL-064, SA-DECL-093, SA-DECL-095, and SA-DECL-100.
+ *
+ * @param jsonSchema - A schema inside the Steerable JSON Schema Profile.
+ * @throws RegistryCompileError When the schema leaves the profile.
+ */
+export function compileSchema<Params = unknown>(jsonSchema: unknown): StrictSchema<Params> {
+  assertSchemaProfile(jsonSchema);
+  const root = jsonSchema as SchemaNode;
+  return {
+    jsonSchema,
+    parse(input: unknown): Params {
+      parseAgainstNode(root, input, "");
+      return input as Params;
+    },
+  };
+}
+
+/**
+ * Builds an object parser that rejects undeclared keys, paired with its portable JSON Schema.
+ *
+ * Prefer {@link compileSchema}; reach for this only when the parameter contract genuinely needs a
+ * hand-written parser (a custom coercion or a cross-field invariant the profile cannot express).
+ * `jsonSchema` is a required argument: an omitted schema previously produced an action that
+ * compiled cleanly and was then silently absent from every generated tool surface. The declared
+ * `keys` and the schema's `properties` are cross-checked so the two halves cannot drift apart
+ * (`SA-DECL-093`).
+ *
+ * Implements SA-DECL-035, SA-DECL-064, SA-DECL-096, and SA-DECL-100.
+ *
+ * @throws RegistryCompileError When the schema leaves the profile or disagrees with `keys`.
+ */
 export function createStrictObjectSchema<Params extends Record<string, unknown>>(
   keys: readonly (keyof Params & string)[],
   parseValues: (input: Record<string, unknown>) => Params,
+  jsonSchema: unknown,
 ): StrictSchema<Params> {
+  assertSchemaProfile(jsonSchema);
+  const declared = [...keys].sort();
+  const described = Object.keys(((jsonSchema as SchemaNode).properties ?? {}) as SchemaNode).sort();
+  if (declared.length !== described.length || declared.some((key, i) => key !== described[i])) {
+    throw new RegistryCompileError(
+      "schema_key_mismatch",
+      `Strict object schema declares keys [${declared.join(", ")}] but its jsonSchema describes properties [${described.join(", ")}]. The parser and the model-facing schema must describe the same parameters (SA-DECL-093).`,
+    );
+  }
+
   return {
+    jsonSchema,
     parse(input: unknown): Params {
       if (!input || typeof input !== "object" || Array.isArray(input)) {
         throw new Error("Expected an object parameter payload.");
@@ -260,9 +434,241 @@ export function createStrictObjectSchema<Params extends Record<string, unknown>>
 }
 
 /** Strict empty-object schema for declarations without parameters. Implements SA-DECL-035 and SA-DECL-064. */
-export const emptyParamsSchema: StrictSchema<Record<string, never>> = createStrictObjectSchema<
+export const emptyParamsSchema: StrictSchema<Record<string, never>> = compileSchema<
   Record<string, never>
->([], () => ({}));
+>({ type: "object", properties: {}, additionalProperties: false });
+
+function schemaProfileError(label: string, path: string, detail: string): RegistryCompileError {
+  return new RegistryCompileError(
+    "schema_profile_violation",
+    `Schema for \"${label}\" at ${path}: ${detail}. See the Steerable JSON Schema Profile in docs/guides/ecosystem-adapters.md.`,
+  );
+}
+
+function requireSchemaNode(node: unknown, path: string, label: string): SchemaNode {
+  if (!node || typeof node !== "object" || Array.isArray(node)) {
+    throw schemaProfileError(label, path, "expected a JSON Schema object");
+  }
+  return node as SchemaNode;
+}
+
+function assertProfileNode(node: SchemaNode, path: string, label: string): void {
+  const type = node.type;
+  const hasAnyOf = "anyOf" in node;
+
+  if (type !== undefined && hasAnyOf) {
+    throw schemaProfileError(
+      label,
+      path,
+      "a node must declare either `type` or `anyOf`, not both; combined forms are not portable",
+    );
+  }
+  if (type !== undefined && !isProfileType(type)) {
+    throw schemaProfileError(
+      label,
+      path,
+      `\`type: ${JSON.stringify(type)}\` is outside the profile; use one of ${Object.keys(PROFILE_TYPE_KEYWORDS).join(", ")}`,
+    );
+  }
+
+  // The keyword scan runs before the structural check below so that a schema whose only sin is an
+  // excluded keyword is rejected by *name* — `$ref`, `oneOf`, `allOf` and `not` all appear on
+  // nodes that declare no `type`, and reporting "declare a type" there would hide the real cause.
+  const allowed = new Set<string>([
+    ...PROFILE_UNIVERSAL_KEYWORDS,
+    ...(isProfileType(type) ? PROFILE_TYPE_KEYWORDS[type] : []),
+  ]);
+  for (const keyword of Object.keys(node)) {
+    if (allowed.has(keyword)) continue;
+    const reason = PROFILE_EXCLUSIONS[keyword];
+    throw schemaProfileError(
+      label,
+      path,
+      reason
+        ? `keyword \`${keyword}\` is outside the profile because ${reason}`
+        : `keyword \`${keyword}\` is outside the profile`,
+    );
+  }
+
+  if (type === undefined && !hasAnyOf && !("enum" in node) && !("const" in node)) {
+    throw schemaProfileError(
+      label,
+      path,
+      "a node must declare at least one of `type`, `anyOf`, `enum`, or `const`",
+    );
+  }
+
+  if (node.description !== undefined && typeof node.description !== "string") {
+    throw schemaProfileError(label, path, "`description` must be a string");
+  }
+  if ("enum" in node && (!Array.isArray(node.enum) || node.enum.length === 0)) {
+    throw schemaProfileError(label, path, "`enum` must be a non-empty array");
+  }
+
+  if (hasAnyOf) {
+    if (!Array.isArray(node.anyOf) || node.anyOf.length === 0) {
+      throw schemaProfileError(label, path, "`anyOf` must be a non-empty array of schemas");
+    }
+    node.anyOf.forEach((member, index) => {
+      const child = requireSchemaNode(member, `${path}/anyOf/${index}`, label);
+      assertProfileNode(child, `${path}/anyOf/${index}`, label);
+    });
+  }
+
+  if (type === "object") assertProfileObjectNode(node, path, label);
+  if (type === "array") {
+    const items = requireSchemaNode(node.items, `${path}/items`, label);
+    assertProfileNode(items, `${path}/items`, label);
+  }
+  if (type === "string") assertProfileStringNode(node, path, label);
+}
+
+function assertProfileObjectNode(node: SchemaNode, path: string, label: string): void {
+  if (node.additionalProperties !== false) {
+    throw schemaProfileError(
+      label,
+      path,
+      "an object node must declare `additionalProperties: false`; declared parameters are closed (SA-DECL-035) and several providers require it",
+    );
+  }
+  const properties = requireSchemaNode(node.properties ?? {}, `${path}/properties`, label);
+  for (const [key, child] of Object.entries(properties)) {
+    const childPath = `${path}/properties/${key}`;
+    assertProfileNode(requireSchemaNode(child, childPath, label), childPath, label);
+  }
+  if (node.required !== undefined) {
+    if (
+      !Array.isArray(node.required) ||
+      node.required.some((key) => typeof key !== "string" || !(key in properties))
+    ) {
+      throw schemaProfileError(
+        label,
+        path,
+        "`required` must be an array of names declared in `properties`",
+      );
+    }
+  }
+}
+
+function assertProfileStringNode(node: SchemaNode, path: string, label: string): void {
+  if (node.pattern !== undefined) {
+    if (typeof node.pattern !== "string") {
+      throw schemaProfileError(label, path, "`pattern` must be a string");
+    }
+    try {
+      new RegExp(node.pattern);
+    } catch {
+      throw schemaProfileError(label, path, `\`pattern\` is not a valid regular expression`);
+    }
+  }
+  if (node.format !== undefined && typeof node.format !== "string") {
+    throw schemaProfileError(label, path, "`format` must be a string");
+  }
+}
+
+function isProfileType(value: unknown): value is ProfileType {
+  return typeof value === "string" && value in PROFILE_TYPE_KEYWORDS;
+}
+
+function parseAgainstNode(node: SchemaNode, value: unknown, path: string): void {
+  const where = path === "" ? "parameters" : `\"${path}\"`;
+
+  if (Array.isArray(node.anyOf)) {
+    const matched = node.anyOf.some((member) => {
+      try {
+        parseAgainstNode(member as SchemaNode, value, path);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (!matched) throw new Error(`${where} matched none of the permitted shapes.`);
+    return;
+  }
+  if ("const" in node && !deepEquals(value, node.const)) {
+    throw new Error(`${where} must equal ${JSON.stringify(node.const)}.`);
+  }
+  if (Array.isArray(node.enum) && !node.enum.some((option) => deepEquals(value, option))) {
+    throw new Error(`${where} must be one of ${JSON.stringify(node.enum)}.`);
+  }
+  if (node.type === undefined) return;
+
+  switch (node.type) {
+    case "object": {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(`${where} must be an object.`);
+      }
+      const record = value as Record<string, unknown>;
+      const properties = (node.properties ?? {}) as SchemaNode;
+      const extraKey = Object.keys(record).find((key) => !(key in properties));
+      if (extraKey) throw new Error(`${where} has an undeclared property \"${extraKey}\".`);
+      for (const key of (node.required as string[] | undefined) ?? []) {
+        if (!(key in record)) throw new Error(`${where} is missing required property \"${key}\".`);
+      }
+      for (const [key, child] of Object.entries(properties)) {
+        if (key in record) {
+          parseAgainstNode(child as SchemaNode, record[key], path === "" ? key : `${path}.${key}`);
+        }
+      }
+      return;
+    }
+    case "array": {
+      if (!Array.isArray(value)) throw new Error(`${where} must be an array.`);
+      value.forEach((entry, index) => {
+        parseAgainstNode(node.items as SchemaNode, entry, `${path}[${index}]`);
+      });
+      return;
+    }
+    case "string": {
+      if (typeof value !== "string") throw new Error(`${where} must be a string.`);
+      if (typeof node.pattern === "string" && !new RegExp(node.pattern).test(value)) {
+        throw new Error(`${where} must match ${node.pattern}.`);
+      }
+      const format = typeof node.format === "string" ? PROFILE_FORMATS[node.format] : undefined;
+      if (format && !format.test(value)) {
+        throw new Error(`${where} must be a valid ${String(node.format)}.`);
+      }
+      return;
+    }
+    case "integer": {
+      if (typeof value !== "number" || !Number.isInteger(value)) {
+        throw new Error(`${where} must be an integer.`);
+      }
+      return;
+    }
+    case "number": {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new Error(`${where} must be a finite number.`);
+      }
+      return;
+    }
+    case "boolean": {
+      if (typeof value !== "boolean") throw new Error(`${where} must be a boolean.`);
+      return;
+    }
+    case "null": {
+      if (value !== null) throw new Error(`${where} must be null.`);
+      return;
+    }
+  }
+}
+
+function deepEquals(left: unknown, right: unknown): boolean {
+  if (left === right) return true;
+  if (typeof left !== typeof right || left === null || right === null) return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+    return left.every((entry, index) => deepEquals(entry, right[index]));
+  }
+  if (typeof left !== "object") return false;
+  const leftKeys = Object.keys(left as object);
+  const rightKeys = Object.keys(right as object);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every(
+    (key) =>
+      key in (right as object) && deepEquals((left as SchemaNode)[key], (right as SchemaNode)[key]),
+  );
+}
 
 /**
  * Compiles declarations into the single runtime source of capability truth.
@@ -671,9 +1077,24 @@ export class CapabilityRegistry {
     }
   }
 
+  /**
+   * Rejects a schema that cannot reach a model.
+   *
+   * `SA-DECL-100` requires the model tool schema to be derivable from the declaration, and
+   * `SA-DECL-096` requires compilation to fail on an invalid schema. A `parse` closure alone is not
+   * derivable into anything a provider can be handed, so an action declaring one used to compile
+   * cleanly and then be absent from every generated tool surface — unreachable by the model, with
+   * no error. Requiring `jsonSchema` here turns that silent invisibility into a build failure.
+   */
   private ensureSchema(schema: unknown, id: string): void {
-    if (!schema || typeof (schema as StrictSchema<unknown>).parse !== "function")
+    const candidate = schema as StrictSchema<unknown> | undefined;
+    if (!candidate || typeof candidate.parse !== "function")
       this.fail("invalid_schema", `Capability \"${id}\" must declare a strict parse schema.`);
+    if (!candidate.jsonSchema || typeof candidate.jsonSchema !== "object")
+      this.fail(
+        "missing_json_schema",
+        `Capability \"${id}\" must declare \`params.jsonSchema\`: the model tool schema is derived from it (SA-DECL-100), so without it the capability compiles but no model can ever call it. Build the schema with \`compileSchema\`, or pass an explicit jsonSchema to \`createStrictObjectSchema\`.`,
+      );
   }
 
   private ensureStringArray(field: string, value: unknown, stateKeys: boolean): void {

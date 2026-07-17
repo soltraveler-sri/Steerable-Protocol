@@ -11,14 +11,15 @@ The package works and is covered by the repository's build, unit tests, Design S
 Declarations are the single source of truth for parameters, effects, policy metadata, execution, and recovery.
 
 ```ts
-import { createStrictObjectSchema, defineAction } from "@steerable/core";
+import { compileSchema, defineAction } from "@steerable/core";
 
 let accent = "#3366FF";
 const setAccent = defineAction<{ hex: string }, { previousHex: string }>({
   id: "palette.set_color", title: "Set accent", description: "Set the accent color.",
-  params: createStrictObjectSchema(["hex"], (input) => {
-    if (typeof input.hex !== "string") throw new Error("hex must be a string");
-    return { hex: input.hex };
+  params: compileSchema({
+    type: "object",
+    properties: { hex: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" } },
+    required: ["hex"], additionalProperties: false,
   }),
   reads: ["design.palette"], writes: ["design.palette"], risk: "safe",
   reversibility: { kind: "undoable" },
@@ -30,6 +31,8 @@ const setAccent = defineAction<{ hex: string }, { previousHex: string }>({
   examples: [{ user: "make the accent green", params: { hex: "#228B22" } }],
 });
 ```
+
+`compileSchema` derives the strict parser from the JSON Schema, so the contract enforced at dispatch and the contract shown to the model are one source and cannot drift. The schema is required: it is what every generated tool surface is derived from, so a declaration without one would compile and then be invisible to the model. Schemas must lie inside the [Steerable JSON Schema Profile](../../docs/guides/ecosystem-adapters.md#the-steerable-json-schema-profile) — the portable cross-provider intersection — and a keyword outside it fails at compile time. When a parameter genuinely needs a hand-written parser, `createStrictObjectSchema(keys, parseValues, jsonSchema)` takes one alongside its explicit schema.
 
 ## Compile the registry
 
@@ -90,4 +93,4 @@ const result = await engine.executeAction({
 
 ## Design notes
 
-Schemas use a small structural `parse` contract, with optional JSON Schema, so apps can keep their validator of choice. Omitted `externalExposure` compiles to `none`; bridge eligibility is never inferred. Mutable context is always an explicit policy input, and `ActionLedger` exposes `getRecords()` plus `subscribe()` for app-owned trail UI.
+Schemas pair a portable JSON Schema with a strict `parse` contract, so apps can keep their validator of choice while every declaration stays derivable into a model-facing tool (`SA-DECL-100`). Both halves are required, and `compileSchema` derives the second from the first. Omitted `externalExposure` compiles to `none`; bridge eligibility is never inferred. Mutable context is always an explicit policy input, and `ActionLedger` exposes `getRecords()` plus `subscribe()` for app-owned trail UI.

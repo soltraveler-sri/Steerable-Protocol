@@ -12,10 +12,19 @@ import {
   type ActionDeclaration,
 } from "./index.js";
 
-const valueSchema = createStrictObjectSchema<{ value: string }>(["value"], (input) => {
-  if (typeof input.value !== "string") throw new Error("value must be a string");
-  return { value: input.value };
-});
+const valueSchema = createStrictObjectSchema<{ value: string }>(
+  ["value"],
+  (input) => {
+    if (typeof input.value !== "string") throw new Error("value must be a string");
+    return { value: input.value };
+  },
+  {
+    type: "object",
+    properties: { value: { type: "string" } },
+    required: ["value"],
+    additionalProperties: false,
+  },
+);
 
 function action(
   id: string,
