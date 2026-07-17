@@ -5,6 +5,7 @@
 
 import type { Palette, ProjectMeta } from "../types";
 import {
+  compileValueSchema,
   emptyParamsSchema,
   type FactEntry,
   type StrictSchema,
@@ -139,8 +140,10 @@ export function stringArraySchema() {
 }
 
 export function nullableStringSchema() {
+  // A root-level union is expressed with `anyOf`, not `type: ["string", "null"]`: an array-valued
+  // `type` sits outside the Steerable JSON Schema Profile, so `compileValueSchema` would reject it.
   return {
-    type: ["string", "null"],
+    anyOf: [{ type: "string" }, { type: "null" }],
   };
 }
 
@@ -170,10 +173,15 @@ export function typographySummarySchema() {
 }
 
 export function fact(key: string, description: string, schema: unknown): FactEntry {
+  // Derive the parser from the fact's JSON Schema instead of an identity `parse: (input) => input`.
+  // An identity parser makes SA-CTX-024 unenforceable in the reference an adopter copies: the
+  // registry's publish-time validation would run, find nothing to check, and pass a lying value
+  // straight to the router. `compileValueSchema` produces a real validator from the same schema
+  // shown to the model, so the two cannot disagree.
   return {
     key,
     description,
-    schema: { parse: (input) => input, jsonSchema: schema },
+    schema: compileValueSchema(schema),
   };
 }
 
@@ -199,4 +207,20 @@ function shareOrigin(host: DesignStudioCapabilityHost): string {
 
 export function clonePalette(palette: Palette): Palette {
   return { ...palette };
+}
+
+/**
+ * Projects the full palette down to the three tokens the `design.palette.summary` fact declares.
+ *
+ * `Palette` carries seven tokens, but the fact schema (`paletteSummarySchema`) declares a closed
+ * three-token summary. Publishing the whole palette therefore emits keys the schema forbids
+ * (`additionalProperties: false`), which now fails publish-time validation (SA-CTX-024). The fact is
+ * a curated summary by design, so the publisher must project rather than the schema widen.
+ */
+export function paletteSummary(palette: Palette): {
+  accent: string;
+  background: string;
+  text: string;
+} {
+  return { accent: palette.accent, background: palette.background, text: palette.text };
 }

@@ -385,6 +385,52 @@ export function compileSchema<Params = unknown>(jsonSchema: unknown): StrictSche
 }
 
 /**
+ * Asserts that a fact-value JSON Schema lies inside the Steerable JSON Schema Profile.
+ *
+ * The parameter-schema variant {@link assertSchemaProfile} additionally requires an object root,
+ * because a provider tool input must be an object. A published fact value carries no such
+ * constraint: a fact may be a string, number, array, enum member, nullable union, or object. This
+ * relaxes only the root-shape rule and reuses the identical per-node profile checks, so a fact
+ * schema is held to the same portability bar as a parameter schema everywhere below the root.
+ *
+ * Implements SA-DECL-016, SA-DECL-074, and SA-DECL-096.
+ *
+ * @param jsonSchema - The candidate fact-value schema.
+ * @param label - Fact key or declaration name used in error messages.
+ * @throws RegistryCompileError When the schema leaves the profile.
+ */
+export function assertValueSchemaProfile(jsonSchema: unknown, label = "fact"): void {
+  const root = requireSchemaNode(jsonSchema, "(root)", label);
+  assertProfileNode(root, "(root)", label);
+}
+
+/**
+ * Compiles a profile-conformant fact-value JSON Schema into a strict parser paired with that schema.
+ *
+ * This is the fact-value analog of {@link compileSchema}: it derives the validator from the schema
+ * so the two representations of a fact's type cannot drift (`SA-DECL-093`, `SA-DECL-095`), and it is
+ * what gives `SA-CTX-024` teeth — a fact declared as a `number` whose publisher emits a string is
+ * rejected at publish rather than silently corrupting router context. Unlike {@link compileSchema}
+ * it admits a non-object root, because a fact value may be a primitive, array, enum, or union.
+ *
+ * Implements SA-DECL-016, SA-DECL-074, SA-DECL-093, SA-DECL-095, and SA-CTX-024.
+ *
+ * @param jsonSchema - A fact-value schema inside the Steerable JSON Schema Profile.
+ * @throws RegistryCompileError When the schema leaves the profile.
+ */
+export function compileValueSchema<Value = unknown>(jsonSchema: unknown): StrictSchema<Value> {
+  assertValueSchemaProfile(jsonSchema);
+  const root = jsonSchema as SchemaNode;
+  return {
+    jsonSchema,
+    parse(input: unknown): Value {
+      parseAgainstNode(root, input, "");
+      return input as Value;
+    },
+  };
+}
+
+/**
  * Builds an object parser that rejects undeclared keys, paired with its portable JSON Schema.
  *
  * Prefer {@link compileSchema}; reach for this only when the parameter contract genuinely needs a
@@ -1025,6 +1071,80 @@ export class CapabilityRegistry {
   /** Parses action parameters through the declaration schema. Implements SA-DECL-035 and SA-EXEC-001. */
   validateActionParams<Params>(action: CompiledActionDeclaration<Params>, params: unknown): Params {
     return action.params.parse(params);
+  }
+
+  /**
+   * Publishes a facts source through value validation.
+   *
+   * Awaits the declaration's `publish()` and validates the returned values with
+   * {@link validatePublishedFacts}. This is the facts-layer analog of {@link validateActionParams}:
+   * action parameters were already parsed at dispatch, but a facts publisher declared the same strict
+   * typed schemas (`SA-DECL-074`) with no equivalent enforcement point, so a lying or malformed fact
+   * reached the router unchecked. Routing every read of published facts through this method closes
+   * that asymmetry — the reference facts-read path validates here rather than calling `publish()`
+   * directly.
+   *
+   * Liveness-independent by design, so it composes with B1's per-principal availability views: a
+   * caller lists the facts live for a principal through a {@link RegistryAvailabilityView}
+   * (`view.getLiveFacts(surfaceId)`) and validates each published payload here by ID. Which facts are
+   * live is a per-principal question answered by the view; whether a published value conforms to its
+   * declared schema is a per-declaration question answered here against immutable compiled data.
+   *
+   * Implements SA-CTX-023, SA-CTX-024, and SA-DECL-074.
+   *
+   * @throws RegistryCompileError When the facts ID is unknown, the payload is not an object, a
+   * top-level key is undeclared, or a value fails its declared schema.
+   */
+  async publishFacts(factsId: CapabilityId): Promise<Record<string, unknown>> {
+    const declaration = this.getFacts(factsId);
+    if (!declaration)
+      throw new RegistryCompileError("unknown_facts", `Unknown facts \"${factsId}\".`);
+    return this.validatePublishedFacts(declaration, await declaration.publish());
+  }
+
+  /**
+   * Validates already-published fact values against a facts declaration.
+   *
+   * Enforces the two facts-integrity contracts a declared-but-unenforced schema left open:
+   * `SA-CTX-023` — every published top-level key MUST be one the declaration enumerates, so a
+   * publisher cannot mint a data-dependent or unbounded set of fact keys at runtime; and
+   * `SA-CTX-024` — every published value MUST parse against its declared fact schema. Present
+   * declared keys are validated against their schema; a declared fact the publisher omits is not an
+   * error here, because only a value that is actually published can misrepresent state.
+   *
+   * Implements SA-CTX-023 and SA-CTX-024.
+   *
+   * @throws RegistryCompileError When the payload is not an object, a key is undeclared, or a value
+   * fails its declared schema.
+   */
+  validatePublishedFacts(
+    declaration: FactsDeclaration,
+    values: Record<string, unknown>,
+  ): Record<string, unknown> {
+    if (!values || typeof values !== "object" || Array.isArray(values))
+      throw new RegistryCompileError(
+        "invalid_facts_payload",
+        `Facts \"${declaration.id}\" must publish an object of fact values.`,
+      );
+    const declared = new Map(declaration.facts.map((fact) => [fact.key, fact]));
+    for (const [key, value] of Object.entries(values)) {
+      const fact = declared.get(key);
+      if (!fact)
+        throw new RegistryCompileError(
+          "undeclared_fact_key",
+          `Facts \"${declaration.id}\" published undeclared top-level fact key \"${key}\". A facts publisher must not create top-level keys outside its declared facts list (SA-CTX-023).`,
+        );
+      try {
+        fact.schema.parse(value);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new RegistryCompileError(
+          "fact_value_invalid",
+          `Facts \"${declaration.id}\" published fact \"${key}\" with a value outside its declared schema (SA-CTX-024): ${detail}`,
+        );
+      }
+    }
+    return values;
   }
 
   private compileAction(declaration: AnyActionDeclaration): void {

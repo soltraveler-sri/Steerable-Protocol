@@ -188,6 +188,32 @@ describe("Design Studio capability declarations", () => {
     }
   });
 
+  it("enforces its own fact schemas at publish, catching a lying value (SA-CTX-024/023)", async () => {
+    const registry = createDesignStudioRegistry(createReducerBackedHost());
+    const editorFacts = registry.getFacts("editor.current_facts");
+    if (!editorFacts) throw new Error("expected editor.current_facts to be declared");
+
+    // The declared publisher's real values pass validation end to end — so the example's
+    // facts-context path is genuinely validated, not merely declared.
+    const published = await registry.publishFacts("editor.current_facts");
+    expect(published["quota.exports_remaining"]).toBe(3);
+
+    // A wrong-typed value for the `number` fact is rejected. This is the proof the schema is a real
+    // validator: with the identity `parse: (input) => input` the reference shipped before, this
+    // corrupt value would sail straight to the router.
+    expect(() =>
+      registry.validatePublishedFacts(editorFacts, {
+        ...published,
+        "quota.exports_remaining": "lots",
+      }),
+    ).toThrow(/quota\.exports_remaining.*SA-CTX-024/s);
+
+    // An undeclared top-level key a data-dependent publisher might inject is rejected (SA-CTX-023).
+    expect(() =>
+      registry.validatePublishedFacts(editorFacts, { ...published, "quota.injected": 1 }),
+    ).toThrow(/undeclared top-level fact key "quota\.injected".*SA-CTX-023/s);
+  });
+
   it("executes the north-star palette.set_color action against the real reducer store", async () => {
     const host = createReducerBackedHost();
     const registry = createDesignStudioRegistry(host);

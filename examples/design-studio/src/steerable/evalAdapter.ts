@@ -358,10 +358,14 @@ async function execute(fixture: EvalFixture) {
 async function context(fixture: EvalFixture) {
   const given = fixture.given as FactsContextGiven;
   const harness = createHarness({ liveSurfaces: [given.surfaceId] });
+  // Route published facts through registry validation rather than calling `declaration.publish()`
+  // directly: the availability view decides which facts are live for this surface, then
+  // `publishFacts` enforces SA-CTX-023/024 over each published payload. This is the reference
+  // facts-read path, so the values reaching the model here are the validated ones.
   const facts = await Promise.all(
     harness.registry.getLiveFacts(given.surfaceId).map(async (declaration) => ({
       id: declaration.id,
-      values: await declaration.publish(),
+      values: await harness.registry.publishFacts(declaration.id),
     })),
   );
   const liveReadTools = new Map(
