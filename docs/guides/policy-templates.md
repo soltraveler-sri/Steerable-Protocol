@@ -146,6 +146,15 @@ Tune from evidence, not anxiety. Run this loop from ledger records, support repo
 
 Do not tune by globally gating all safe reversible work. That is the plan-everything anti-pattern, even when introduced as a temporary safety measure.
 
+## Chain Modes: `Gated suffix` vs. `Plan preview`
+
+These two modes read similarly but treat a mixed chain differently, and choosing the wrong one surprises adopters.
+
+- **`Gated suffix`** runs the reversible prefix immediately and holds the first gated action plus everything after it. Reach for it when the early steps of a chain are genuinely safe and only a later step (a quota spend, a destructive endpoint) deserves review — the user sees fast progress and one gate.
+- **`Plan preview`** holds the *entire* chain for one whole-plan review before anything runs, even steps that would resolve `Instant execution` on their own. That is deliberate (`SA-POL-090`, Resolution Note 9 in [autonomy-policy.md](../spec/autonomy-policy.md)): the reviewed unit is the whole plan, and pre-running a prefix would show the user a plan whose opening moves had already happened. Reach for it when seeing the full plan first is the point.
+
+So: if you want "run the safe part, then let me approve the rest," map the gated action to `Gated suffix`, not `Plan preview`. Do not expect a clean safe action to keep executing when it is chained ahead of a `Plan preview` step — the whole chain waits by design.
+
 ## Framework / Developer Boundary Audit
 
 This guide was checked against the north-star [§6.4](../../Steerable-Protocol-NorthStar.md#64-what-the-framework-decides-vs-what-the-developer-decides) and `SA-POL-180` through `SA-POL-190`.

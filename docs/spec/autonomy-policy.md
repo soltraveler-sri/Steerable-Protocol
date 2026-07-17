@@ -92,7 +92,7 @@ This document does not define the detailed execution mechanics of each mode, the
 - **SA-POL-087:** `Optimistic chain` MUST NOT include an action that lacks a claimed reversal mechanism in the aggregate undo affordance.
 - **SA-POL-088:** `Gated suffix` MUST allow an eligible reversible prefix to execute under its own resolved mode while holding the first gated action and the remaining suffix until the policy gate for that suffix is satisfied or declined.
 - **SA-POL-089:** `Gated suffix` MUST identify the boundary between the executed prefix and held suffix in a form recordable by the ledger.
-- **SA-POL-090:** `Plan preview` MUST present the proposed action set as a single policy review outcome before execution begins, and execution MUST proceed only for the reviewed scope.
+- **SA-POL-090:** `Plan preview` MUST present the proposed action set as a single policy review outcome before execution begins, and execution MUST proceed only for the reviewed scope. (Informative: because the reviewed unit is the whole set, a chain resolving to `Plan preview` holds every step, including a step that would resolve `Instant execution` alone; see Resolution Note 9. `Gated suffix` is the mode that executes a safe prefix immediately.)
 - **SA-POL-091:** `Plan preview` MUST NOT be required by the framework solely because a model proposed an action.
 - **SA-POL-092:** `Step-gated` MUST require a separate policy gate for each action or step that policy marks as individually sensitive, regulated, high-risk, or otherwise not safely coverable by one grouped gate.
 - **SA-POL-093:** `Step-gated` MUST preserve step identity and rationale for ledger recording.
@@ -233,6 +233,7 @@ The following issue-level decisions are recorded so later authors do not re-open
 6. SA-DECL handoff on risk, reversibility, effects, and confirmation semantics is resolved here without changing the value sets from `SA-DECL-038` through `SA-DECL-044`.
 7. SA-DECL handoff on `effects.cost` is resolved by preset-specific floors: `none` has no floor, `quota` starts at a gate appropriate to posture, and `money` floors to stronger gated modes.
 8. SA-DECL handoff on posture presets is resolved by keeping presets outside declarations and consuming registry-derived metadata plus app policy inputs.
+9. Issue #83: chain-level `Plan preview` intentionally holds the entire chain, including steps that would resolve `safe` / `Instant execution` on their own. `SA-POL-090` makes the reviewed unit the whole proposed action set, and executing any prefix before that review would present the user a plan whose opening steps had already happened. This does not conflict with `SA-POL-073` / `SA-POL-146`, which constrain how presets resolve an individual action, not how a chain folds under `SA-POL-096`. The mode that runs a reversible prefix immediately while gating the rest is `Gated suffix`; a developer who wants prefix-now-review-later semantics maps the gated action there. The anti-ceremony guarantee for a clean safe action standing alone is unchanged.
 
 No conflict with the north-star was identified while writing this document.
 
@@ -264,6 +265,6 @@ This document was checked against the founding decision after drafting:
 | **SA-POL-189** | That runtime-signal demotion is explicit, bounded by default, and auditable. | Which runtime signals exist and what thresholds or verifier outputs feed policy. |
 | **SA-POL-190** | That every policy decision must be recordable for the ledger. | Ledger storage depth, retention, redaction, and audit strictness beyond later conformance minimums. |
 
-## 14. Resolution Note (Informative)
+## 16. Resolution Note (Informative)
 
 Issue #41 resolves `effectFloor.applied` as a participation flag, not merely a mode-change flag: a candidate floor is applied when it is at least as restrictive as the mode present when the engine evaluates it. This preserves equal-floor evidence in the recorded rationale and makes no-floor and already-stricter cases deterministically false. The Design Studio example, now backed by `@steerable/core`, uses that rule, so no example code change is required.
