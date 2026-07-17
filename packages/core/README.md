@@ -74,6 +74,36 @@ const result = await engine.executeAction({
 });
 ```
 
+## Wire a model
+
+`createEcosystemAdapter` compiles the registry into AI-SDK-style tool schemas and a `canUseTool`
+policy callback — the **policy-preview seam**. It resolves policy and validates params but never
+executes or records; on `allow` you dispatch the same proposal into the engine — the **execution
+seam** — so the ledger record exists. The two halves compose with the APIs above:
+
+```ts
+import { createEcosystemAdapter, canonicalToolNameProfile } from "@steerable/core";
+
+const adapter = createEcosystemAdapter(registry, "creative-tool", {
+  toolNames: canonicalToolNameProfile,
+});
+
+// In your provider's tool-call dispatch:
+const decision = adapter.canUseTool({ toolName, params, context: { surfaceId: "editor" } });
+if (decision.status === "deny") return denyToolCall(decision.reason);
+// `allow` and `needs-approval` route into the ledgered execution seam; the engine's ApprovalHook
+// is the single consent point, so you do not gate again here (SA-EXEC-015, SA-EXEC-016).
+const result = await engine.executeAction({
+  intent, surfaceId: "editor", posture: "creative-tool",
+  actionId: decision.toolName, params: decision.params,
+});
+// result.record is the SteeringInvocationRecord written to the ledger.
+```
+
+This composition — the last hop the adapter alone never completes — is spelled out in the
+[ecosystem adapters guide](../../docs/guides/ecosystem-adapters.md#from-a-decision-to-a-ledgered-execution)
+and proven end-to-end in [`src/composition.test.ts`](./src/composition.test.ts).
+
 ## Host seams
 
 - `SurfaceReadiness` lets a platform navigate, await a declared surface, and revalidate its next capability. Registry events provide the default implementation; the default timeout is 5000 ms.
