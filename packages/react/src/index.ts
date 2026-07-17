@@ -53,8 +53,8 @@ export interface SteerableRuntime {
   readonly registry: CapabilityRegistry;
   readonly ledger: ActionLedger;
   readonly engine: ExecutionEngine;
-  executeChain(request: ExecuteChainRequest): ChainExecutionRun;
-  executeAction(request: ExecuteActionRequest): ChainExecutionRun;
+  executeChain(request: ExecuteChainRequest): Promise<ChainExecutionRun>;
+  executeAction(request: ExecuteActionRequest): Promise<ChainExecutionRun>;
   undoAll(run: ChainExecutionRun): Promise<void>;
   subscribe(listener: () => void): () => void;
   getSnapshot(): SteerableState;
@@ -83,8 +83,8 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
     };
     listeners.forEach((listener) => listener());
   };
-  const refreshRecords = () => {
-    ledger.getRecords().forEach((record) => records.set(record.recordId, record));
+  const refreshRecords = async () => {
+    (await ledger.getRecords()).forEach((record) => records.set(record.recordId, record));
   };
   const approvalHook: ApprovalHook = async (request) => {
     pendingApproval = request;
@@ -107,32 +107,31 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
     surfaceReadiness: options.surfaceReadiness,
     now: options.now,
   });
-  const track = (run: ChainExecutionRun) => {
-    records.set(run.recordId, run.getRecord());
-    refreshRecords();
+  const track = async (run: ChainExecutionRun) => {
+    records.set(run.recordId, await run.getRecord());
+    await refreshRecords();
     emit();
-    void run.done.finally(() => {
-      records.set(run.recordId, run.getRecord());
-      refreshRecords();
+    void run.done.finally(async () => {
+      records.set(run.recordId, await run.getRecord());
+      await refreshRecords();
       emit();
     });
     return run;
   };
 
-  refreshRecords();
+  void refreshRecords().then(emit);
   snapshot = { records: Array.from(records.values()), pendingApproval };
   ledger.subscribe(() => {
-    refreshRecords();
-    emit();
+    void refreshRecords().then(emit);
   });
   return {
     registry,
     ledger,
     engine,
-    executeChain: (request) => track(engine.executeChain(request)),
+    executeChain: (request) => engine.executeChain(request).then(track),
     executeAction: (request) =>
-      track(
-        engine.executeChain({
+      engine
+        .executeChain({
           ...request,
           steps: [
             {
@@ -142,12 +141,12 @@ export function createSteerableRuntime(options: SteerableRuntimeOptions): Steera
               surfaceTimeoutMs: request.surfaceTimeoutMs,
             },
           ],
-        }),
-      ),
+        })
+        .then(track),
     undoAll: async (run) => {
       await run.undoAll();
-      records.set(run.recordId, run.getRecord());
-      refreshRecords();
+      records.set(run.recordId, await run.getRecord());
+      await refreshRecords();
       emit();
     },
     subscribe: (listener) => {
