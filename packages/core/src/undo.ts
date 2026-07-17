@@ -8,7 +8,19 @@ import type {
 } from "./registry.js";
 import type { ActionLedger, UndoHandleRecord, UndoHandleStatus } from "./ledger.js";
 
-/** Trusted executable extension of a serializable ledger handle. Implements SA-LED-070–075. */
+/**
+ * Executable view of a serializable ledger handle.
+ *
+ * The `execute` behavior is *derived at undo time from the handle's serializable `payload`*
+ * (params/result/snapshot) plus the runtime's registry binding and snapshot store — never from a
+ * captured closure. A closure cannot survive a durable ledger's JSON round-trip (SA-LED-144), so a
+ * handle read back from server durable storage arrives as plain `UndoHandleRecord` data with no
+ * functions; `makeExecutableHandle` reconstructs the executable behavior from that data, which is
+ * what keeps SA-LED-070 (executable undo handles) and SA-LED-144 (durable backends) from being
+ * mutually exclusive. SA-LED-073 requires the handle to carry exactly this data.
+ *
+ * Implements SA-LED-070–075 and SA-LED-144.
+ */
 export interface RuntimeUndoHandle extends UndoHandleRecord {
   execute(context: ActionExecutionContext): MaybePromise<unknown>;
 }
@@ -32,10 +44,27 @@ export interface MemorySnapshotStore {
   write(key: StateKey, value: unknown): void;
   getState(): Record<StateKey, unknown>;
 }
-let handleSequence = 0;
+/**
+ * Collision-free default undo-handle ID.
+ *
+ * A module-level `let handleSequence = 0` counter (the previous scheme) restarts at 0 on every cold
+ * process — so a serverless/multi-instance durable adopter re-mints `undo_handle_1` after a restart,
+ * a primary-key collision on a shared store that silently reroutes an undo to the wrong step. A
+ * random UUID is unique across processes and instances. `crypto.randomUUID` is a standard global in
+ * Node 19+ (this repo is Node 22) and all modern browsers. The readable prefix is retained for logs.
+ *
+ * Implements SA-LED-070 and SA-LED-146.
+ */
+const defaultUndoHandleId = (): string => `undo_handle_${crypto.randomUUID()}`;
 
 /**
  * Builds a trusted inverse, snapshot restore, or honest no-undo result.
+ *
+ * The returned handle's `payload` carries the serializable data a durable ledger persists and later
+ * rehydrates through `makeExecutableHandle` (SA-LED-073). `options.idFactory` overrides handle-ID
+ * minting so a durable/multi-instance adopter can guarantee cross-process uniqueness; it defaults to
+ * a UUID rather than a process-local counter (SA-LED-070).
+ *
  * Implements SA-LED-070–077 and SA-LED-080–086.
  */
 export function createUndoHandleForAction(
@@ -47,9 +76,10 @@ export function createUndoHandleForAction(
     result?: unknown;
     snapshot?: StateSnapshot;
   },
+  options: { idFactory?: () => string } = {},
 ): RuntimeUndoHandle | { noUndoReason: string } {
   const base = {
-    handleId: `undo_handle_${++handleSequence}`,
+    handleId: (options.idFactory ?? defaultUndoHandleId)(),
     recordId: input.recordId,
     stepId: input.stepId,
     actionId: action.id,
@@ -90,30 +120,89 @@ export function createUndoHandleForAction(
   return { noUndoReason: "honest_irreversible" };
 }
 
+/**
+ * Reconstructs the executable undo behavior for a handle from its serializable data — never from a
+ * captured closure — so a handle read back from a durable ledger as plain data undoes correctly.
+ *
+ * Dispatches by recorded `mechanism` using the handle's own `payload` plus the live runtime binding:
+ * `declared_inverse` looks up `action.undo` from `context.registry`; `runtime_snapshot` restores
+ * `payload.snapshot` through `context.snapshotStore`. When the data is insufficient to run — an
+ * unknown mechanism, a missing snapshot payload, or a registry that no longer exposes the action's
+ * declared inverse — it returns a legible `{ nonExecutableReason }` so the caller degrades to an
+ * honest `unavailable` status rather than a false success. A missing snapshot store is surfaced at
+ * execution time (a thrown, recorded failure) rather than here, so the undo attempt is logged.
+ *
+ * This is the seam that keeps SA-LED-070 (executable undo handles) and SA-LED-144 (durable backends)
+ * from being mutually exclusive. Implements SA-LED-070–077 and SA-LED-144.
+ */
+export function makeExecutableHandle(
+  handle: UndoHandleRecord,
+  context: Pick<ActionExecutionContext, "registry" | "snapshotStore">,
+): RuntimeUndoHandle | { nonExecutableReason: string } {
+  const payload = (handle.payload ?? {}) as {
+    params?: unknown;
+    result?: unknown;
+    snapshot?: StateSnapshot;
+  };
+  switch (handle.mechanism) {
+    case "declared_inverse": {
+      const action = context.registry.getAction(handle.actionId);
+      if (!action?.undo)
+        return {
+          nonExecutableReason: `Declared inverse for "${handle.actionId}" is unavailable: the action is not bound in this runtime's registry.`,
+        };
+      const undo = action.undo;
+      return {
+        ...handle,
+        execute: (ctx) =>
+          undo({ params: payload.params, result: payload.result, snapshot: payload.snapshot }, ctx),
+      };
+    }
+    case "runtime_snapshot": {
+      const snapshot = payload.snapshot;
+      if (!snapshot)
+        return {
+          nonExecutableReason: `Snapshot undo for "${handle.actionId}" is unavailable: the handle payload carries no snapshot.`,
+        };
+      return {
+        ...handle,
+        execute: (ctx) => {
+          if (!ctx.snapshotStore) throw new Error("Snapshot undo requires a StateSnapshotAdapter.");
+          return ctx.snapshotStore.restore(snapshot);
+        },
+      };
+    }
+    default:
+      return {
+        nonExecutableReason: `Undo mechanism "${handle.mechanism}" has no trusted runtime behavior.`,
+      };
+  }
+}
+
 /** Executes and records one available trusted undo handle. Implements SA-LED-071 and SA-LED-075–076. */
 export async function runUndoHandle(
   ledger: ActionLedger,
   handle: UndoHandleRecord,
   context: ActionExecutionContext,
 ): Promise<UndoOneResult> {
-  if (!("execute" in handle) || typeof handle.execute !== "function")
-    return {
-      handleId: handle.handleId,
-      status: "unavailable",
-      errorSummary: "Undo handle is not executable in this runtime.",
-    };
   if (handle.status !== "available")
     return {
       handleId: handle.handleId,
       status: handle.status,
       errorSummary: `Undo handle is ${handle.status}.`,
     };
-  const runtimeHandle = handle as RuntimeUndoHandle;
+  const executable = makeExecutableHandle(handle, context);
+  if ("nonExecutableReason" in executable)
+    return {
+      handleId: handle.handleId,
+      status: "unavailable",
+      errorSummary: executable.nonExecutableReason,
+    };
   await ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, {
     status: "attempted",
   });
   try {
-    await runtimeHandle.execute(context);
+    await executable.execute(context);
     await ledger.updateUndoHandle(handle.recordId, handle.stepId, handle.handleId, {
       status: "succeeded",
     });
