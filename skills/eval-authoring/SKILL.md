@@ -88,7 +88,8 @@ The deterministic suite is not the definition of done. A conformance claim addit
 - **Empty params on a `200` is a failure.** It is the silent one, and no fixture can see it.
 - **Record:** model ID, the provider's response identifier or usage block, the routed `{actionId, params}`, and verbatim provider error text on failure.
 - **Scope:** this tier is `LP-5` of `skills/integration-audit/references/live-pass.md` and nothing more. Running it does not satisfy `LP-1` through `LP-4`; the full gate lives in that skill.
-- **If no live call can be made** — no key, no provider access, no budget authorization — report the tier `Inconclusive` and name what is missing. Do not simulate it, do not stub the provider and call the result live, and do not report the deterministic suite as covering it. An honest `Inconclusive` is the correct result; it blocks a conformance claim, which is what it should do.
+- **A provider `5xx` is not a contract failure.** `429`, `503`, and `529` (overloaded) mean the provider never adjudicated the request — the integration sent nothing wrong. Retry once within the bound; if it persists, report `Inconclusive` with the status code, never a failure. Only a `4xx` indicts the wire contract.
+- **If no live call can be made** — no key, no provider access, no budget authorization, or a provider that stays unavailable — report the tier `Inconclusive` and name what is missing. Do not simulate it, do not stub the provider and call the result live, and do not report the deterministic suite as covering it. An honest `Inconclusive` is the correct result; it blocks a conformance claim, which is what it should do.
 
 ## Duplicate Avoidance
 

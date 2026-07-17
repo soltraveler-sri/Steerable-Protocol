@@ -115,9 +115,11 @@ Two rules when the target is not a web app:
 - **Proves:** the wire contract between the registry and the provider holds. This is where provider 4xx errors and silently empty params live.
 - **Run:** one real request end to end, from a cold start — the target's real router, the real provider, the real registry, no cached prompt, no replayed transcript. Derive the utterance from a declared registry example for an action with non-empty params.
 - **Record:** model ID, the provider's response identifier or usage block, the routed `{actionId, params}` actually produced, whether params were populated, and verbatim provider error text on failure.
-- **Fail when:** the request errors (a provider 4xx on tool-name grammar or schema shape is a `Fail`, not an environment problem), the router emits an action ID absent from the registry, or params arrive empty for an utterance that supplied them.
+- **Fail when:** the request errors with a provider **4xx** (tool-name grammar, schema shape, malformed request), the router emits an action ID absent from the registry, or params arrive empty for an utterance that supplied them. A 4xx is a `Fail`, not an environment problem: it means the integration sent something the provider's contract rejects, which is exactly what this check exists to catch.
 - **Empty params on a `200` is a `Fail.`** It is the silent one, and a green fixture suite cannot see it.
-- **Cost bound:** one request. A second only to separate a transient network failure from a contract failure. Three is the ceiling. Never loop, never sweep utterances, never run a matrix — that is an eval suite, and the deterministic suite makes zero model calls on purpose (`skills/eval-authoring/SKILL.md`). Confirm with the human before exceeding three live requests.
+- **A provider `5xx` is not a `Fail`** — `429` (rate limit), `503`, and `529` (overloaded) are capacity and availability, not contract. The integration sent nothing wrong. Retry once within the cost bound; if it persists, record `Inconclusive` with the status code as the `blocker`, not `Fail`. Do not report a conformance defect the target does not have, and do not let a busy provider bully the audit into a verdict — `Inconclusive` is the honest answer when the provider never adjudicated the request.
+- **Distinguish the two before deciding.** The status code is the discriminator and it is in the response; record it verbatim. If you cannot tell contract from capacity, that is `Inconclusive`, not a coin flip.
+- **Cost bound:** one request. A second only to separate a transient failure (`5xx`/network) from a contract failure. Three is the ceiling — and retrying a `529` counts against it, so a persistently overloaded provider yields `Inconclusive` rather than a retry loop. Never loop, never sweep utterances, never run a matrix — that is an eval suite, and the deterministic suite makes zero model calls on purpose (`skills/eval-authoring/SKILL.md`). Confirm with the human before exceeding three live requests.
 
 ## Item Binding
 
@@ -154,7 +156,7 @@ Do not:
 
 An `Inconclusive` check records:
 
-- `blocker` — the specific reason: no credentials, no reachable datastore, cannot build, no provider key, production-only store with no authorization, no runnable host.
+- `blocker` — the specific reason: no credentials, no reachable datastore, cannot build, no provider key, production-only store with no authorization, no runnable host, or a provider that never adjudicated the request (`429`/`503`/`529` after a retry).
 - `attempted` — the commands run and their output.
 - `unblock` — exactly what a human would have to supply.
 - `verdict_effect` — the mapped SA-CONF items and the conformance claim this blocks.
