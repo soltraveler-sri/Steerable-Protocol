@@ -1,10 +1,10 @@
 fixtureFormatVersion: "0.1.0"
 kind: policy-decisions
-id: design-studio.policy.sticky-grant-share-link
-title: Developer-policy sticky grant raises share link to instant
-description: A developer-policy grant persisting beyond the session raises a non-destructive business-app side effect to Instant execution.
-authoredBy: issue-17-implementing-agent
-authoredDate: "2026-07-09"
+id: design-studio.policy.sticky-grant-session-scoped
+title: Session-scoped framework grant raises share link to instant
+description: A framework grant bound to the current session and carrying an expiration raises a non-destructive business-app side effect to Instant execution.
+authoredBy: issue-83-implementing-agent
+authoredDate: "2026-07-17"
 target:
   integrationId: design-studio
   registry:
@@ -17,21 +17,22 @@ sample:
 requirementRefs:
   - SA-POL-126
   - SA-POL-127
-  - SA-POL-130
+  - SA-POL-129
 given:
   posturePreset: business-app
   surfaceId: settings
   sessionContext:
     allowGrantsToRaiseAutonomy: true
+    sessionId: session_studio_1
   stickyGrants:
-    # Persists far beyond the current session, which SA-POL-130 permits only as developer
-    # policy. Without `source: developer` this grant would read as framework-supplied and be
-    # refused under SA-POL-129 — see sticky-grant-unscoped-framework-refused.yaml.
-    - grantId: grant_share_instant
+    # The common case SA-POL-129 describes: framework-supplied, bounded to the current session,
+    # and expiring no later than it. Both bounds are present, so the grant resolves.
+    - grantId: grant_share_session
       subject: action:share.copy_link
       effect: Instant execution
-      expires: "2099-01-01T00:00:00.000Z"
-      source: developer
+      expires: "2026-07-17T23:59:59.000Z"
+      source: framework
+      sessionId: session_studio_1
   proposed:
     kind: action
     steps:

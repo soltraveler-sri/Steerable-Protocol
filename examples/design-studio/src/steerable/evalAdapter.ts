@@ -80,6 +80,18 @@ interface PolicyGiven extends JsonObject {
     subject: string;
     effect: AutonomyMode;
     expires: string;
+    /**
+     * Grant provenance, which decides how long the grant may live (SA-POL-129, SA-POL-130).
+     * Absent means `framework`, matching the engine's stricter default: a grant that does not
+     * claim developer provenance cannot be assumed to have it.
+     */
+    source?: "framework" | "developer";
+    /**
+     * Session the grant is bound to. SA-POL-129 requires a framework grant to expire no later
+     * than the current session, so a framework grant must name one; it resolves only when it
+     * matches `sessionContext.sessionId`.
+     */
+    sessionId?: string;
   }[];
   proposed: {
     kind: "action" | "chain";
@@ -579,6 +591,10 @@ function policyInputsFor(given: PolicyGiven): PolicyInputs {
     posture: given.posturePreset,
     currentSurface: given.surfaceId,
     grants: mapStickyGrants(given.stickyGrants ?? []),
+    // The session a fixture's grants are evaluated against. Without it a session-scoped grant
+    // could never match, so SA-POL-129's "no later than the current session" bound would be
+    // untestable from a fixture.
+    sessionId: typeof sessionContext.sessionId === "string" ? sessionContext.sessionId : undefined,
     allowGrantsToRaiseAutonomy: sessionContext.allowGrantsToRaiseAutonomy === true,
     userMinimumMode: asExecutionMode(sessionContext.userMinimumMode),
     overrides: mapPolicyOverrides(given),
@@ -600,6 +616,12 @@ function mapStickyGrants(grants: NonNullable<PolicyGiven["stickyGrants"]>): Scop
       grantedMode: asExecutionMode(grant.effect) ?? "Instant execution",
       issuer: "eval-fixture",
       subject: grant.subject,
+      // Provenance and session scope are the SA-POL-129/130 bounds. Both are passed through
+      // rather than defaulted here: the engine already resolves an absent `source` to the
+      // stricter "framework" reading, and re-implementing that default would let the adapter
+      // drift from the rule it is supposed to be exercising.
+      source: grant.source,
+      sessionId: grant.sessionId,
     };
   });
 }

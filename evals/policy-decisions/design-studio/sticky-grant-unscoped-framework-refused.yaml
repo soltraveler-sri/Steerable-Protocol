@@ -1,0 +1,54 @@
+fixtureFormatVersion: "0.1.0"
+kind: policy-decisions
+id: design-studio.policy.sticky-grant-unscoped-framework-refused
+title: Unscoped framework grant does not raise autonomy
+description: A framework grant that names no session and outlives the session is refused, so the action holds at the posture preset's Plan preview instead of rising to Instant execution.
+authoredBy: issue-83-implementing-agent
+authoredDate: "2026-07-17"
+target:
+  integrationId: design-studio
+  registry:
+    id: design-studio.registry
+    version: "2026-07-09"
+    ref: examples/design-studio/src/steerable/designStudioCapabilities.ts
+sample:
+  isSample: false
+  note: Real Design Studio suite fixture.
+requirementRefs:
+  - SA-POL-129
+  - SA-POL-130
+given:
+  posturePreset: business-app
+  surfaceId: settings
+  sessionContext:
+    allowGrantsToRaiseAutonomy: true
+    sessionId: session_studio_1
+  stickyGrants:
+    # No `source`, so this reads as framework-supplied — a grant that does not claim developer
+    # provenance cannot be assumed to have it. It names no session and expires in 2099, so it
+    # would raise autonomy forever and across sessions: exactly what SA-POL-129 forbids and what
+    # only a developer grant may do under SA-POL-130. The grant is refused and the action holds
+    # at the preset's floor. This is the negative half of sticky-grant-share-link.yaml: the two
+    # fixtures differ only by `source: developer`.
+    - grantId: grant_share_unscoped
+      subject: action:share.copy_link
+      effect: Instant execution
+      expires: "2099-01-01T00:00:00.000Z"
+  proposed:
+    kind: action
+    steps:
+      - stepId: copy_share
+        actionId: share.copy_link
+        surfaceId: settings
+        params: {}
+expected:
+  negativeCase: none
+  chainMode: Plan preview
+  steps:
+    - stepId: copy_share
+      actionId: share.copy_link
+      resolvedMode: Plan preview
+      reasonCodes:
+        - preset_business_app_side_effect_irreversible_plan_preview
+  rationaleMustInclude:
+    - grant framework_grant_missing_session_scope

@@ -242,6 +242,13 @@ Policy-decision fixtures assert `SA-POL-080` through `SA-POL-108`.
 
 `given` contains `posturePreset`, `surfaceId`, optional `sessionContext`, optional `runtimeSignals`, `stickyGrants`, and a proposed `action` or `chain`. Proposed steps name registry action IDs and JSON params; policy metadata is read from the target registry, not copied into the fixture.
 
+Each entry in `stickyGrants` names `grantId`, `subject`, `effect`, and `expires`, plus two optional fields that carry the `SA-POL-129` / `SA-POL-130` bounds on how long a grant may live:
+
+| Field | Meaning |
+| --- | --- |
+| `source` | `framework` or `developer`. Absent means `framework`, the stricter reading: a grant that does not claim developer provenance is not assumed to have it. A `framework` grant must name both a `sessionId` and an `expires`, because `SA-POL-129` requires it to expire no later than the current session; one that omits either is refused. Only a `developer` grant may persist beyond the session (`SA-POL-130`). |
+| `sessionId` | Session the grant is bound to. It resolves only when it matches `sessionContext.sessionId`. |
+
 Resolved modes must be exactly:
 
 ```text

@@ -55,7 +55,9 @@
               "grantId": { "$ref": "common.schema.json#/definitions/fixtureId" },
               "subject": { "type": "string", "minLength": 1 },
               "effect": { "$ref": "common.schema.json#/definitions/autonomyMode" },
-              "expires": { "type": "string", "minLength": 1 }
+              "expires": { "type": "string", "minLength": 1 },
+              "source": { "enum": ["framework", "developer"] },
+              "sessionId": { "type": "string", "minLength": 1 }
             }
           }
         },
