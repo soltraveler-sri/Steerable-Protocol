@@ -131,6 +131,7 @@ function renderReport({ target, checklistPath, rows }) {
 - scope: TODO
 - partial_coverage: TODO
 - commands_run: TODO
+- live_pass: TODO
 - overall_verdict: TODO
 
 ## Integration Map
@@ -146,6 +147,26 @@ function renderReport({ target, checklistPath, rows }) {
 - undo/snapshot: TODO
 - generated artifacts: TODO
 - external bridge: TODO
+
+## Live Pass Record
+
+Run references/live-pass.md against the running target. No conformance claim without it.
+
+- build_sha: TODO
+- drive_channel: TODO
+- datastore_identity: TODO
+- datastore_authorization: TODO
+- surface_inventory: TODO
+
+| Check | Result | Channel | Artifact | Justification / Blocker |
+| --- | --- | --- | --- | --- |
+| \`LP-1\` every declared surface loads clean | TODO | TODO | TODO | TODO |
+| \`LP-2\` action executes against a real datastore, undo reverses it | TODO | TODO | TODO | TODO |
+| \`LP-3\` cross-surface continuation across a real navigation | TODO | TODO | TODO | TODO |
+| \`LP-4\` published facts differ after a real UI change | TODO | TODO | TODO | TODO |
+| \`LP-5\` first live model-routed request succeeds | TODO | TODO | TODO | TODO |
+
+Artifact is what was observed, not an assertion that the code is correct.
 
 ## Findings
 

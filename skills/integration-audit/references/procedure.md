@@ -36,6 +36,12 @@ Use the future guide at `docs/guides/retrofit-existing-app.md` when present. If 
 
 Record each seam in the integration map with file and line evidence. If a seam cannot be found, record the searches attempted.
 
+## Live Pass
+
+Run `references/live-pass.md` after the locate procedure and before checklist execution. It defines the minimum set of runtime observations — every declared surface loading clean, one action executing against a real datastore and undoing, one cross-surface continuation across a real navigation, published facts differentially compared to rendered state, and the first live model-routed request — plus the artifacts each must produce and how to map them onto a target that is not a web app.
+
+The live pass is not optional and is not satisfied by static reading, tests, evals, or a build. A target that cannot be driven yields `Inconclusive`, which is the correct result and caps the conformance verdict; it does not license a static pass.
+
 ## Checklist Execution
 
 Parse or manually enumerate SA-CONF-001 through SA-CONF-089 from `docs/spec/conformance-checklist.md`.
@@ -45,7 +51,8 @@ For each row:
 - Copy the item ID, applies value, severity, and requirement IDs into the report.
 - Read the row's assertion and `How to look` text from the checklist.
 - Execute the row against the target.
-- Store the result token and evidence. Evidence can be static code, tests, command output, runtime behavior, or an explicit condition for not-applicable items.
+- Store the result token and evidence. Evidence is observed runtime behavior, static code, tests, command output, or an explicit condition for not-applicable items. For rows whose assertion is about behavior, static code and tests are supporting evidence, not sufficient evidence: cite the live pass artifact.
+- For rows in the `references/live-pass.md` item-binding table, do not record `Pass` from static evidence while the mapped live-pass check is not `Pass`.
 - If evidence is unavailable, use `Inconclusive`; do not infer a pass.
 - If the item is one of the checklist's pending-clarification rows, keep the pending status unless the official spec has changed.
 
