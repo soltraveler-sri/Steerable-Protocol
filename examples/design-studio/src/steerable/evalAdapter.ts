@@ -302,7 +302,7 @@ async function execute(fixture: EvalFixture) {
     approvalHook: autoApprove,
     now: () => fixedNow,
   });
-  const run = engine.executeChain({
+  const run = await engine.executeChain({
     intent: "eval cross-surface chain",
     surfaceId: given.startSurfaceId,
     posture: asPosture(given.policyContext?.posturePreset) ?? "creative-tool",
@@ -315,7 +315,7 @@ async function execute(fixture: EvalFixture) {
     })),
   });
   const result = await run.done;
-  const recordBeforeUndo = run.getRecord();
+  const recordBeforeUndo = await run.getRecord();
   const failedOrSkipped = recordBeforeUndo.steps
     .filter((step) => step.status === "failed" || step.status === "skipped")
     .map((step) => step.stepId);
@@ -392,7 +392,7 @@ async function undo(fixture: EvalFixture) {
     now: () => fixedNow,
   });
   const succeededSteps = given.executed.steps.filter((step) => step.status === "succeeded");
-  const run = engine.executeChain({
+  const run = await engine.executeChain({
     intent: "eval undo setup",
     surfaceId,
     posture,
@@ -409,7 +409,7 @@ async function undo(fixture: EvalFixture) {
     throw new Error(`Undo setup execution failed: ${setup.failure?.message ?? setup.status}`);
   }
 
-  const record = run.getRecord();
+  const record = await run.getRecord();
   const context = {
     registry: harness.registry,
     surfaceId,
@@ -437,7 +437,8 @@ async function undo(fixture: EvalFixture) {
             : "inverse-applied"
           : "failed-with-disclosure",
       order: [step.stepId],
-      stepResults: stepResultsFor(given, run.getRecord()),
+      // Re-read after the undo so the reported step statuses reflect it, not the pre-undo record.
+      stepResults: stepResultsFor(given, await run.getRecord()),
       disclosure:
         result.status === "succeeded"
           ? undefined
@@ -452,7 +453,8 @@ async function undo(fixture: EvalFixture) {
   const undoResult = await undoAllRecord(harness.ledger, record.recordId, context, {
     allowPartial,
   });
-  const settled = run.getRecord();
+  // Re-read after `undoAllRecord` so `settled` carries the undo outcome the ledger recorded.
+  const settled = await run.getRecord();
   const order = undoOrderFor(settled);
 
   return {

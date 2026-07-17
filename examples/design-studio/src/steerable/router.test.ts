@@ -202,7 +202,7 @@ describe("scripted Design Studio intent router", () => {
         registry,
         state: host.getState(),
       }) as ActionIntentRoute;
-      const run = engine.executeChain({
+      const run = await engine.executeChain({
         intent: item.utterance,
         surfaceId: item.sourceSurfaceId,
         posture: "creative-tool",
@@ -326,12 +326,15 @@ describe("scripted Design Studio intent router", () => {
       ...requestBase,
       intent: "make the accent forest green",
     }) as ActionIntentRoute;
-    const safeResult = await engine.executeChain({
+    // Two phases, deliberately kept separate: awaiting `executeChain` yields the run handle once
+    // the invocation record is durably written; awaiting `run.done` yields the settled outcome.
+    const safeRun = await engine.executeChain({
       intent: "make the accent forest green",
       surfaceId: designStudioSurfaceIds.editor,
       posture: "creative-tool",
       steps: safeRoute.steps,
-    }).done;
+    });
+    const safeResult = await safeRun.done;
 
     expect(safeResult.status).toBe("succeeded");
     expect(host.getState().palette.accent).toBe("#228B22");
@@ -342,7 +345,7 @@ describe("scripted Design Studio intent router", () => {
       state: host.getState(),
       intent: "export this mock page",
     }) as ActionIntentRoute;
-    const exportRun = engine.executeChain({
+    const exportRun = await engine.executeChain({
       intent: "export this mock page",
       surfaceId: designStudioSurfaceIds.editor,
       posture: "creative-tool",
@@ -351,7 +354,7 @@ describe("scripted Design Studio intent router", () => {
     const pending = await approval.waitForPendingRequest();
 
     expect(pending.heldSteps.map((step) => step.title)).toEqual(["Export project"]);
-    expect(exportRun.getRecord().steps[0].status).toBe("held");
+    expect((await exportRun.getRecord()).steps[0].status).toBe("held");
 
     approval.approve("test inline apply");
 
@@ -373,7 +376,7 @@ describe("scripted Design Studio intent router", () => {
       state: host.getState(),
       intent: "switch to citrus and hide pricing",
     }) as ActionIntentRoute;
-    const chainRun = engine.executeChain({
+    const chainRun = await engine.executeChain({
       intent: "switch to citrus and hide pricing",
       surfaceId: designStudioSurfaceIds.editor,
       posture: "creative-tool",
@@ -424,12 +427,13 @@ describe("scripted Design Studio intent router", () => {
       "palette.set_color",
     ]);
 
-    const result = await engine.executeChain({
+    const crossSurfaceRun = await engine.executeChain({
       intent: utterance,
       surfaceId: designStudioSurfaceIds.templates,
       posture: "creative-tool",
       steps: route.steps,
-    }).done;
+    });
+    const result = await crossSurfaceRun.done;
 
     expect(result.status).toBe("succeeded");
     expect(host.getCurrentSurfaceId()).toBe(designStudioSurfaceIds.editor);
@@ -462,7 +466,7 @@ describe("scripted Design Studio intent router", () => {
       registry,
       state: host.getState(),
     }) as ActionIntentRoute;
-    const run = engine.executeChain({
+    const run = await engine.executeChain({
       intent: utterance,
       surfaceId: designStudioSurfaceIds.templates,
       posture: "creative-tool",
@@ -558,7 +562,7 @@ describe("scripted Design Studio intent router", () => {
       registry: creative.registry,
       state: creative.host.getState(),
     }) as ActionIntentRoute;
-    const creativeRun = creativeEngine.executeChain({
+    const creativeRun = await creativeEngine.executeChain({
       intent: utterance,
       surfaceId: designStudioSurfaceIds.templates,
       posture: "creative-tool",
@@ -598,7 +602,7 @@ describe("scripted Design Studio intent router", () => {
       registry: business.registry,
       state: business.host.getState(),
     }) as ActionIntentRoute;
-    const businessRun = businessEngine.executeChain({
+    const businessRun = await businessEngine.executeChain({
       intent: utterance,
       surfaceId: designStudioSurfaceIds.templates,
       posture: "business-app",
@@ -612,7 +616,7 @@ describe("scripted Design Studio intent router", () => {
       "surface.navigate_surface",
       "project.export_project",
     ]);
-    expect(businessRun.getRecord().steps.map((step) => step.status)).toEqual([
+    expect((await businessRun.getRecord()).steps.map((step) => step.status)).toEqual([
       "held",
       "held",
       "held",

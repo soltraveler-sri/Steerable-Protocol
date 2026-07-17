@@ -231,7 +231,12 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const run = runtime.executeChain({
+        // Awaiting `executeChain` is what makes the run handle trustworthy: the runtime only
+        // resolves it once the invocation record has been written and the write has reported
+        // success. A durable ledger that rejects the write rejects here instead, so we never show
+        // the user a `recordId` for a record that does not exist. The chain's *execution* is still
+        // in flight after this await — settlement is `run.done`, below.
+        const run = await runtime.executeChain({
           intent: trimmed,
           surfaceId: currentSurfaceIdRef.current,
           posture: postureRef.current,
@@ -294,7 +299,10 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
 
   const undoStep = useCallback(
     async (recordId: string, stepId: string) => {
-      const record = runtime.ledger.requireRecord(recordId);
+      // Ledger reads are awaited because `ActionLedger` is a storage seam: the in-memory backend
+      // answers synchronously, a durable one over the network does not. Awaiting reads the same
+      // way for both is what lets an app swap backends without rewriting this component.
+      const record = await runtime.ledger.requireRecord(recordId);
       const step = record.steps.find((item) => item.stepId === stepId);
 
       if (!step || !canUndoStep(step) || !("handleId" in step.undo)) {
@@ -322,7 +330,7 @@ export function SteeringProvider({ children }: { children: ReactNode }) {
       if (run) {
         await run.undoAll();
       } else {
-        const record = runtime.ledger.requireRecord(recordId);
+        const record = await runtime.ledger.requireRecord(recordId);
 
         await undoAllRecord(
           runtime.ledger,
