@@ -127,9 +127,9 @@ These checks are the runtime evidence for items the static read cannot decide. W
 |---|---|
 | `LP-1` | `SA-CONF-017`, `SA-CONF-020`, `SA-CONF-067`, `SA-CONF-068` |
 | `LP-2` | `SA-CONF-029`, `SA-CONF-042`, `SA-CONF-073`, `SA-CONF-075`, `SA-CONF-079` |
-| `LP-3` | `SA-CONF-022`, `SA-CONF-066` |
+| `LP-3` | `SA-CONF-022`, `SA-CONF-066`, `SA-CONF-099` |
 | `LP-4` | `SA-CONF-017`, `SA-CONF-018`, `SA-CONF-019`, `SA-CONF-025`, `SA-CONF-046` |
-| `LP-5` | `SA-CONF-012`, `SA-CONF-025`, `SA-CONF-053`, `SA-CONF-054` |
+| `LP-5` | `SA-CONF-012`, `SA-CONF-025`, `SA-CONF-053`, `SA-CONF-054`, `SA-CONF-104` |
 
 This mapping routes evidence. It does not add rules to those rows or change their assertions; the checklist row stays the authority on what each item asserts.
 

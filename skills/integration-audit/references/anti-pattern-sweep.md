@@ -9,6 +9,7 @@ Read each `How to recognize it` section:
 - `docs/anti-patterns/duplicate-tool-layers.md#how-to-recognize-it`
 - `docs/anti-patterns/framework-maximalism.md#how-to-recognize-it`
 - `docs/anti-patterns/plan-everything.md#how-to-recognize-it`
+- `docs/anti-patterns/prompt-as-mechanism.md#how-to-recognize-it`
 - `docs/anti-patterns/unsafe-magic.md#how-to-recognize-it`
 
 Use `docs/spec/conformance-checklist.md` section 7 to map sweep evidence back to SA-CONF items.
