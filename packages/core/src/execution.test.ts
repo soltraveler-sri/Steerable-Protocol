@@ -9,7 +9,9 @@ import {
   createStrictObjectSchema,
   defineAction,
   defineSurface,
+  runUndoHandle,
   type ActionDeclaration,
+  type ActionExecutionContext,
 } from "./index.js";
 
 const valueSchema = createStrictObjectSchema<{ value: string }>(
@@ -342,5 +344,265 @@ describe("SA-EXEC and SA-LED core", () => {
     expect((await run.done).status).toBe("canceled");
     expect(state).toBe("before");
     expect((await run.getRecord()).steps[0].status).toBe("undone");
+  });
+});
+
+describe("N2 — undo-handle supersession (SA-LED-077, SA-LED-146)", () => {
+  it("supersedes a stale cross-invocation handle, refuses undoing it, and preserves the newer effect", async () => {
+    let state = "initial";
+    const set = action("palette.set_color", {
+      execute: ({ value }) => {
+        const previous = state;
+        state = value;
+        return previous;
+      },
+      undo: ({ result }) => {
+        state = result ?? "missing";
+      },
+    });
+    const core = registry([set], { editor: [set.id] });
+    const ledger = new InMemoryLedger();
+    const engine = new ExecutionEngine({ registry: core, ledger });
+
+    // Older invocation writes design.value = "old" and keeps an available, full undo handle.
+    const older = await engine.executeChain({
+      intent: "set old",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [{ actionId: set.id, params: { value: "old" } }],
+    });
+    expect((await older.done).status).toBe("succeeded");
+    expect(state).toBe("old");
+
+    // Newer invocation writes the SAME state key. This must eagerly supersede the older handle.
+    const newer = await engine.executeChain({
+      intent: "set new",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [{ actionId: set.id, params: { value: "new" } }],
+    });
+    expect((await newer.done).status).toBe("succeeded");
+    expect(state).toBe("new");
+
+    // The supersession is a persisted status transition on the older handle, visible in the trail.
+    const olderRecord = await older.getRecord();
+    const staleHandle = olderRecord.steps[0].undo;
+    expect(staleHandle).toMatchObject({ status: "superseded" });
+    if (!("handleId" in staleHandle)) throw new Error("expected a superseded handle record");
+
+    // Undoing the older handle directly is HARD-REFUSED with a reason naming supersession, and the
+    // newer effect is never destroyed — there is no "undo anyway" bypass.
+    const context: ActionExecutionContext = {
+      registry: core,
+      surfaceId: "editor",
+      now: () => new Date(),
+    };
+    const refusal = await runUndoHandle(ledger, staleHandle, context);
+    expect(refusal.status).toBe("superseded");
+    expect(refusal.errorSummary).toMatch(/[Ss]upersed/);
+    expect(state).toBe("new");
+
+    // Aggregate undo of the older invocation surfaces the supersession reason and reverses nothing.
+    const undo = await older.undoAll();
+    expect(undo.undoneStepIds).toEqual([]);
+    expect(undo.notUndoneStepIds).toEqual(["step_1"]);
+    expect(undo.disclosure).toMatch(/[Ss]upersed/);
+    expect(state).toBe("new");
+    expect(
+      olderRecord.disclosures.some(
+        (item) => item.kind === "partial_undo" && /[Ss]upersed/.test(item.message),
+      ),
+    ).toBe(true);
+  });
+
+  it("discloses degraded_ledger without failing the executed step when the supersede write fails (SA-LED-146/003)", async () => {
+    class FailingSupersedeLedger extends InMemoryLedger {
+      supersedeUndoHandle(_handleId: string, _reason: string): void {
+        throw new Error("durable supersede write rejected");
+      }
+    }
+    let state = "initial";
+    const set = action("palette.set_color", {
+      execute: ({ value }) => {
+        const previous = state;
+        state = value;
+        return previous;
+      },
+      undo: ({ result }) => {
+        state = result ?? "missing";
+      },
+    });
+    const core = registry([set], { editor: [set.id] });
+    const ledger = new FailingSupersedeLedger();
+    const engine = new ExecutionEngine({ registry: core, ledger });
+
+    await (
+      await engine.executeChain({
+        intent: "set old",
+        surfaceId: "editor",
+        posture: "creative-tool",
+        steps: [{ actionId: set.id, params: { value: "old" } }],
+      })
+    ).done;
+    const newer = await engine.executeChain({
+      intent: "set new",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [{ actionId: set.id, params: { value: "new" } }],
+    });
+    const done = await newer.done;
+
+    // The executed step ran; a failed post-success supersede write MUST NOT retroactively fail it.
+    expect(done.status).toBe("succeeded");
+    expect(done.record.steps[0].status).toBe("succeeded");
+    // The stale availability is disclosed, never left silent.
+    expect(done.record.disclosures.some((item) => item.kind === "degraded_ledger")).toBe(true);
+  });
+
+  it("still undoes a same-key chain fully in reverse order (ruling 2 — supersession is cross-invocation only)", async () => {
+    let state = "s0";
+    const set = action("palette.set_color", {
+      execute: ({ value }) => {
+        const previous = state;
+        state = value;
+        return previous;
+      },
+      undo: ({ result }) => {
+        state = result ?? "missing";
+      },
+    });
+    const core = registry([set], { editor: [set.id] });
+    const ledger = new InMemoryLedger();
+    const engine = new ExecutionEngine({ registry: core, ledger });
+
+    // Two steps of ONE invocation write the same state key. Neither supersedes the other.
+    const run = await engine.executeChain({
+      intent: "two same-key writes",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [
+        { actionId: set.id, params: { value: "s1" } },
+        { actionId: set.id, params: { value: "s2" } },
+      ],
+    });
+    expect((await run.done).status).toBe("succeeded");
+    expect(state).toBe("s2");
+
+    const record = await run.getRecord();
+    expect(
+      record.steps.map((step) => ("handleId" in step.undo ? step.undo.status : "none")),
+    ).toEqual(["available", "available"]);
+
+    // Aggregate undo composes over the whole chain in reverse execution order back to the start.
+    const undo = await run.undoAll();
+    expect(undo.status).toBe("succeeded");
+    expect(undo.undoneStepIds).toEqual(["step_2", "step_1"]);
+    expect(state).toBe("s0");
+  });
+});
+
+describe("B2 — gate/undo cancellation race (SA-EXEC-088, SA-LED-003)", () => {
+  // creative-tool + destructive + irreversible resolves to Step-gated: an *in-loop* gate, which is
+  // exactly the site the B2 race lives at (a Plan-preview gate sits before the loop and is already
+  // guarded by the loop's top-of-iteration `undoRequested` check).
+  function gatedAction(execute: () => string) {
+    return action("project.export_file", {
+      risk: "destructive",
+      reversibility: { kind: "irreversible" },
+      effects: { external: false, cost: "none", sensitive: false },
+      undo: undefined,
+      execute,
+    });
+  }
+
+  it("cancels a held gate on undo-all and never runs the held step, even if the hook ignores the signal", async () => {
+    let executed = false;
+    let reached!: () => void;
+    let release!: () => void;
+    const atGate = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const planned = gatedAction(() => {
+      executed = true;
+      return "exported";
+    });
+    const core = registry([planned], { editor: [planned.id] });
+    const ledger = new InMemoryLedger();
+    const engine = new ExecutionEngine({
+      registry: core,
+      ledger,
+      snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
+      approvalHook: async () => {
+        reached();
+        await held; // block at the gate, deliberately ignoring request.signal
+        return { status: "approved" };
+      },
+    });
+    const run = await engine.executeChain({
+      intent: "export",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [{ actionId: planned.id, params: { value: "out" } }],
+    });
+    await atGate; // the gate is held; the approval is pending
+    const undo = run.undoAll(); // undo-all lands DURING the held gate
+    release(); // the hook now returns "approved", still ignoring the signal
+    await undo;
+    const done = await run.done;
+
+    expect(executed).toBe(false); // SA-EXEC-088: the not-yet-started held step must not run
+    expect(done.status).toBe("canceled"); // legible, consistent chain outcome
+    expect(done.record.steps[0].status).toBe("canceled");
+    expect(done.record.steps[0].executionResult?.ok).not.toBe(true);
+    // SA-LED-003: no historical fact was rewritten from canceled to succeeded.
+    expect(done.record.steps.some((step) => step.status === "succeeded")).toBe(false);
+  });
+
+  it("lets a signal-honoring gate hook return canceled honestly instead of fabricating a decline", async () => {
+    let executed = false;
+    let reached!: () => void;
+    const atGate = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    const planned = gatedAction(() => {
+      executed = true;
+      return "exported";
+    });
+    const core = registry([planned], { editor: [planned.id] });
+    const ledger = new InMemoryLedger();
+    const engine = new ExecutionEngine({
+      registry: core,
+      ledger,
+      snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
+      approvalHook: (request) =>
+        new Promise((resolve) => {
+          reached();
+          request.signal?.addEventListener(
+            "abort",
+            () => resolve({ status: "canceled", reason: "user invoked undo mid-gate" }),
+            { once: true },
+          );
+        }),
+    });
+    const run = await engine.executeChain({
+      intent: "export",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [{ actionId: planned.id, params: { value: "out" } }],
+    });
+    await atGate;
+    const undo = run.undoAll();
+    const done = await run.done;
+    await undo;
+
+    expect(executed).toBe(false);
+    expect(done.status).toBe("canceled");
+    // SA-LED-036: the approval is recorded canceled — the honest, now-reachable vocabulary — not a
+    // fabricated decline the user never made.
+    expect(done.record.approval.status).toBe("canceled");
+    expect(done.record.steps[0].status).toBe("canceled");
   });
 });
