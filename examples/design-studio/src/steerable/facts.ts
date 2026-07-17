@@ -7,11 +7,11 @@ import { defineFacts } from "@steerable/core";
 import { designStudioSurfaceIds, type DesignStudioCapabilityHost } from "./capabilityModel";
 import {
   buildShareLink,
-  clonePalette,
   enumJsonSchema,
   fact,
   heroLayouts,
   nullableStringSchema,
+  paletteSummary,
   paletteSummarySchema,
   projectTones,
   stringArraySchema,
@@ -107,7 +107,7 @@ function editorFacts(host: DesignStudioCapabilityHost) {
     "project.name": state.projectMeta.name,
     "project.goal": state.projectMeta.goal,
     "design.selection": "landing-page",
-    "design.palette.summary": clonePalette(state.palette),
+    "design.palette.summary": paletteSummary(state.palette),
     "design.typography.summary": { ...state.typography },
     "design.hero_layout": state.heroLayout,
     "design.sections.visible_ids": state.sections
@@ -129,7 +129,7 @@ function templatesFacts(host: DesignStudioCapabilityHost) {
     "template.available_ids": state.templates.map((template) => template.id),
     "template.current_tone": state.projectMeta.tone,
     "project.audience": state.projectMeta.audience,
-    "design.palette.summary": clonePalette(state.palette),
+    "design.palette.summary": paletteSummary(state.palette),
     "design.typography.summary": { ...state.typography },
     "design.hero_layout": state.heroLayout,
     "quota.exports_remaining": state.exportQuota.remaining,

@@ -3,6 +3,7 @@ import {
   RegistryCompileError,
   assertSchemaProfile,
   compileSchema,
+  compileValueSchema,
   createStrictObjectSchema,
   emptyParamsSchema,
 } from "./index.js";
@@ -171,6 +172,38 @@ describe("Steerable JSON Schema Profile", () => {
           objectSchema({ value: { type: "string" } }, ["value"]),
         ),
       ).not.toThrow();
+    });
+  });
+
+  describe("fact-value schemas (compileValueSchema)", () => {
+    it("admits the non-object roots a parameter schema forbids, and validates them", () => {
+      // A fact value may be a primitive, array, enum member, or union — none of which is an object
+      // root, so `compileSchema` would reject them. `compileValueSchema` relaxes only that rule.
+      const count = compileValueSchema<number>({ type: "number" });
+      expect(count.parse(3)).toBe(3);
+      expect(() => count.parse("3")).toThrow(/must be a finite number/);
+
+      const route = compileValueSchema<string>({ type: "string" });
+      expect(() => route.parse(7)).toThrow(/must be a string/);
+
+      const tone = compileValueSchema({ type: "string", enum: ["warm", "direct"] });
+      expect(() => tone.parse("warm")).not.toThrow();
+      expect(() => tone.parse("cold")).toThrow(/must be one of/);
+
+      const ids = compileValueSchema({ type: "array", items: { type: "string" } });
+      expect(() => ids.parse(["a", "b"])).not.toThrow();
+      expect(() => ids.parse(["a", 2])).toThrow(/must be a string/);
+
+      const nullable = compileValueSchema({ anyOf: [{ type: "string" }, { type: "null" }] });
+      expect(() => nullable.parse(null)).not.toThrow();
+      expect(() => nullable.parse(3)).toThrow(/matched none of the permitted shapes/);
+    });
+
+    it("holds fact schemas to the same profile as parameter schemas below the root", () => {
+      expect(() => compileValueSchema({ type: "number", minimum: 1 })).toThrow(
+        RegistryCompileError,
+      );
+      expect(() => compileValueSchema({ type: ["string", "null"] })).toThrow(/outside the profile/);
     });
   });
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CapabilityRegistry,
   RegistryCompileError,
+  compileValueSchema,
   createStrictObjectSchema,
   defineAction,
   defineFacts,
@@ -9,6 +10,7 @@ import {
   defineSurface,
   type ActionDeclaration,
   type AnyCompiledActionDeclaration,
+  type FactsDeclaration,
 } from "./registry.js";
 import {
   posturePresetMappings,
@@ -153,6 +155,100 @@ describe("SA-DECL registry compilation", () => {
     ],
   ])("reports SA-DECL-096 errors for %s", (_label, compile) => {
     expect(compile).toThrow(RegistryCompileError);
+  });
+});
+
+describe("SA-CTX-023/024 published-fact validation", () => {
+  const quotaSurface = defineSurface({
+    id: "design-studio",
+    title: "Design Studio",
+    description: "The editor surface.",
+    capabilities: ["quota.current_facts"],
+  });
+
+  function factsRegistry(
+    publish: FactsDeclaration["publish"],
+    schema = compileValueSchema({ type: "number" }),
+  ): CapabilityRegistry {
+    return new CapabilityRegistry({
+      facts: [
+        defineFacts({
+          id: "quota.current_facts",
+          title: "Quota facts",
+          description: "Bounded quota context.",
+          surface: "design-studio",
+          facts: [
+            { key: "quota.exports_remaining", description: "Remaining exports.", schema },
+            {
+              key: "ui.route",
+              description: "Current route.",
+              schema: compileValueSchema({ type: "string" }),
+            },
+          ],
+          publish,
+        }),
+      ],
+      surfaces: [quotaSurface],
+    });
+  }
+
+  it("validates and returns a payload whose values conform to their declared schemas", async () => {
+    const registry = factsRegistry(() => ({
+      "quota.exports_remaining": 3,
+      "ui.route": "/settings",
+    }));
+    await expect(registry.publishFacts("quota.current_facts")).resolves.toEqual({
+      "quota.exports_remaining": 3,
+      "ui.route": "/settings",
+    });
+  });
+
+  it("rejects a value whose type violates its declared fact schema (SA-CTX-024)", async () => {
+    const registry = factsRegistry(() => ({
+      "quota.exports_remaining": "three",
+      "ui.route": "/settings",
+    }));
+    await expect(registry.publishFacts("quota.current_facts")).rejects.toThrow(
+      RegistryCompileError,
+    );
+    await expect(registry.publishFacts("quota.current_facts")).rejects.toThrow(
+      /published fact "quota.exports_remaining" .*SA-CTX-024/s,
+    );
+  });
+
+  it("rejects a data-dependent undeclared top-level fact key (SA-CTX-023)", async () => {
+    const registry = factsRegistry(() => ({
+      "quota.exports_remaining": 3,
+      "ui.route": "/settings",
+      "quota.injected": 9,
+    }));
+    await expect(registry.publishFacts("quota.current_facts")).rejects.toThrow(
+      /undeclared top-level fact key "quota.injected".*SA-CTX-023/s,
+    );
+  });
+
+  it("rejects a non-object payload and an unknown facts id", async () => {
+    const registry = factsRegistry(() => 42 as never);
+    await expect(registry.publishFacts("quota.current_facts")).rejects.toThrow(
+      /must publish an object/,
+    );
+    await expect(registry.publishFacts("no.such_facts")).rejects.toThrow(
+      /Unknown facts "no.such_facts"/,
+    );
+  });
+
+  it("gives an identity parser nothing to catch — why real schemas matter (C4)", async () => {
+    // The pre-fix reference declared `schema: { parse: (input) => input }`. Routed through the same
+    // publishFacts enforcement point, a wrong-typed value still sails through: the point is only as
+    // real as the declared parser. This pins the C4 half — compileValueSchema is what makes SA-CTX-024
+    // bite in the example an adopter copies.
+    const registry = factsRegistry(() => ({ "quota.exports_remaining": "not a number" }), {
+      parse: (input) => input,
+      jsonSchema: { type: "number" },
+    });
+    await expect(registry.publishFacts("quota.current_facts")).resolves.toEqual({
+      "quota.exports_remaining": "not a number",
+    });
   });
 });
 
