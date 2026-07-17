@@ -14,6 +14,7 @@ import type { ProjectMeta } from "../types";
 import {
   ExecutionEngine,
   InMemoryLedger,
+  canonicalToolNameProfile,
   createEcosystemAdapter,
   type CapabilityRegistry,
   type CompiledReadToolDeclaration,
@@ -285,7 +286,11 @@ describe("Design Studio capability declarations", () => {
 
   it("exports JSON schemas for every Design Studio action through the ecosystem adapter", () => {
     const registry = createDesignStudioRegistry(createReducerBackedHost());
-    const adapter = createEcosystemAdapter(registry, "creative-tool");
+    // The canonical profile maps IDs to themselves, so the dotted-key assertion below stays a
+    // statement about coverage rather than about any one provider's name rewriting.
+    const adapter = createEcosystemAdapter(registry, "creative-tool", {
+      toolNames: canonicalToolNameProfile,
+    });
 
     expect(Object.keys(adapter.toolSchemas).sort()).toEqual(
       registry

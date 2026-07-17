@@ -19,10 +19,19 @@ import {
 } from "./policy.js";
 import { InMemoryLedger } from "./ledger.js";
 
-const stringParams = createStrictObjectSchema<{ value: string }>(["value"], (input) => {
-  if (typeof input.value !== "string") throw new Error("value must be a string");
-  return { value: input.value };
-});
+const stringParams = createStrictObjectSchema<{ value: string }>(
+  ["value"],
+  (input) => {
+    if (typeof input.value !== "string") throw new Error("value must be a string");
+    return { value: input.value };
+  },
+  {
+    type: "object",
+    properties: { value: { type: "string" } },
+    required: ["value"],
+    additionalProperties: false,
+  },
+);
 
 function action(overrides: Partial<ActionDeclaration<{ value: string }>> = {}) {
   return defineAction({

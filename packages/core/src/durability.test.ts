@@ -4,6 +4,7 @@ import {
   ExecutionEngine,
   InMemoryLedger,
   RecordedValueCloneError,
+  compileSchema,
   createStrictObjectSchema,
   defineAction,
   defineSurface,
@@ -12,10 +13,21 @@ import {
   type PreExecutionHook,
 } from "./index.js";
 
-/** Accepts any payload so a test can prove what survives storage rather than what a schema allows. */
-const anySchema = {
-  parse: (input: unknown) => input as Record<string, unknown>,
-};
+/** Shorthand for the params type these fixtures declare, kept honest by the casts below. */
+type Params = ActionDeclaration<Record<string, unknown>, string>["params"];
+
+/**
+ * The default parameter contract for these fixtures: one optional string.
+ *
+ * Built with `compileSchema` so the parser and the model-facing schema are one source
+ * (SA-DECL-093, SA-DECL-095). `value` is optional because several chains below dispatch steps with
+ * no parameters at all.
+ */
+const valueSchema = compileSchema<Record<string, unknown>>({
+  type: "object",
+  properties: { value: { type: "string" } },
+  additionalProperties: false,
+});
 
 function action(
   id: string,
@@ -25,7 +37,7 @@ function action(
     id,
     title: id,
     description: `Runs ${id}.`,
-    params: anySchema,
+    params: valueSchema,
     reads: ["design.value"],
     writes: ["design.value"],
     risk: "safe",
@@ -92,7 +104,7 @@ function durableLedger(
     updateUndoAttempt: wrap("updateUndoAttempt"),
     requireRecord: wrap("requireRecord"),
     getRecords: wrap("getRecords"),
-    subscribe: (listener) => inner.subscribe(listener),
+    subscribe: (listener: () => void) => inner.subscribe(listener),
   } as unknown as ActionLedger;
   return { ledger, inner, calls };
 }
@@ -306,10 +318,15 @@ describe("SA-CONF-068 uncompilable chains report scope instead of throwing", () 
 
   it("records an invalid parameter payload as a refused chain without throwing", async () => {
     const strict = action("palette.set_color", {
-      params: createStrictObjectSchema<{ value: string }>(["value"], (input) => {
-        if (typeof input.value !== "string") throw new Error("value must be a string");
-        return { value: input.value };
-      }) as unknown as ActionDeclaration<Record<string, unknown>, string>["params"],
+      // A hand-written parser, because this test asserts on that parser's own error text.
+      params: createStrictObjectSchema<{ value: string }>(
+        ["value"],
+        (input) => {
+          if (typeof input.value !== "string") throw new Error("value must be a string");
+          return { value: input.value };
+        },
+        { type: "object", properties: { value: { type: "string" } }, additionalProperties: false },
+      ) as unknown as Params,
     });
     const ledger = new InMemoryLedger();
     const engine = new ExecutionEngine({ registry: registry([strict]), ledger });
@@ -390,7 +407,16 @@ describe("SA-CONF-068 uncompilable chains report scope instead of throwing", () 
 
 describe("SA-EXEC-010 recorded values survive storage", () => {
   it("stores a BigInt parameter and still records the intent", async () => {
-    const remove = action("db.delete_row", { reversibility: { kind: "irreversible" } });
+    const remove = action("db.delete_row", {
+      reversibility: { kind: "irreversible" },
+      // The genuine `createStrictObjectSchema` case: a coercion the profile cannot express. The
+      // model sends a JSON integer; the app widens it to a BigInt before it reaches the ledger.
+      params: createStrictObjectSchema<{ id: bigint }>(
+        ["id"],
+        (input) => ({ id: input.id as bigint }),
+        { type: "object", properties: { id: { type: "integer" } }, additionalProperties: false },
+      ) as unknown as Params,
+    });
     const ledger = new InMemoryLedger();
     const engine = new ExecutionEngine({ registry: registry([remove]), ledger });
 
@@ -408,7 +434,29 @@ describe("SA-EXEC-010 recorded values survive storage", () => {
   });
 
   it("stores Date, Map, Set, and undefined without corrupting them", async () => {
-    const set = action("palette.set_color");
+    // Another hand-written parser: the wire carries an ISO string, an object, and an array, which
+    // the app hydrates into Date, Map, and Set. None of the three runtime types is expressible in
+    // the profile, so the coercion has to live in the parser rather than in the schema.
+    const set = action("palette.set_color", {
+      params: createStrictObjectSchema<Record<string, unknown>>(
+        ["when", "tags", "seen", "missing"],
+        (input) => input,
+        {
+          type: "object",
+          properties: {
+            when: { type: "string", format: "date-time" },
+            tags: {
+              type: "object",
+              properties: { a: { type: "integer" } },
+              additionalProperties: false,
+            },
+            seen: { type: "array", items: { type: "string" } },
+            missing: { type: "null" },
+          },
+          additionalProperties: false,
+        },
+      ) as unknown as Params,
+    });
     const ledger = new InMemoryLedger();
     const engine = new ExecutionEngine({ registry: registry([set]), ledger });
     const when = new Date("2026-07-17T00:00:00.000Z");

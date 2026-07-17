@@ -90,13 +90,15 @@ describe("@steerable/react", () => {
         void executeChain({ intent: "open settings then set theme", surfaceId: "editor", posture: "creative-tool", steps: [
           { actionId: "editor.navigate_settings", params: {} },
           { actionId: "settings.set_theme", params: {}, targetSurfaceId: "settings", surfaceTimeoutMs: 100 },
-        ] }).done;
+        ] });
       }}>{route}</button>;
     }
     render(<SteerableProvider runtime={runtime}><FakeRouter /></SteerableProvider>);
     await act(async () => { screen.getByRole("button").click(); });
     await waitFor(() => expect(screen.getByRole("button").textContent).toBe("settings"));
-    await waitFor(() => expect(runtime.ledger.requireRecord("inv_1").steps.map((step) => step.status)).toEqual(["succeeded", "succeeded"]));
+    await waitFor(async () =>
+      expect((await runtime.ledger.requireRecord("inv_1")).steps.map((step) => step.status)).toEqual(["succeeded", "succeeded"]),
+    );
   });
 
   it("publishes facts and updates steering state from runtime execution without polling", async () => {
@@ -109,7 +111,7 @@ describe("@steerable/react", () => {
       return <>
         <output data-testid="facts">{values?.["design.theme"] as string ?? "waiting"}</output>
         <output data-testid="records">{state.records.length}</output>
-        <button onClick={() => void executeAction({ intent: "navigate", surfaceId: "editor", posture: "creative-tool", actionId: "editor.navigate_settings", params: {} }).done}>run</button>
+        <button onClick={() => void executeAction({ intent: "navigate", surfaceId: "editor", posture: "creative-tool", actionId: "editor.navigate_settings", params: {} })}>run</button>
       </>;
     }
     render(<SteerableProvider runtime={runtime}><Consumer /></SteerableProvider>);
@@ -151,7 +153,7 @@ describe("@steerable/react", () => {
       const { executeAction } = useSteerable();
       return <>
         <output data-testid="approval">{pendingApproval ? pendingApproval.heldSteps[0]?.actionId : "none"}</output>
-        <button onClick={() => void executeAction({ intent: "apply", surfaceId: "editor", posture: "creative-tool", actionId: "editor.apply_change", params: {} }).done}>apply</button>
+        <button onClick={() => void executeAction({ intent: "apply", surfaceId: "editor", posture: "creative-tool", actionId: "editor.apply_change", params: {} })}>apply</button>
       </>;
     }
     render(<SteerableProvider runtime={runtime}><Consumer /></SteerableProvider>);
@@ -183,6 +185,14 @@ const propDrivenDeclarations: RegistryDeclarations = {
     }),
   ],
   surfaces: declarations.surfaces,
+};
+
+// The suite runs on Node; `@steerable/core` and this binding take no Node
+// dependency, so the root has no `@types/node`. Declaring the surface actually
+// used keeps `tsconfig.tests.json` honest without pulling in a type package.
+declare const process: {
+  on(event: "unhandledRejection", listener: (reason: unknown) => void): void;
+  off(event: "unhandledRejection", listener: (reason: unknown) => void): void;
 };
 
 function captureUnhandledRejections(): { drain: () => Promise<unknown[]> } {

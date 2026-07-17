@@ -11,7 +11,7 @@ import {
   InMemoryLedger,
   resolveActionPolicy,
   CapabilityRegistry,
-  createStrictObjectSchema,
+  compileSchema,
   createMemorySnapshotStore,
   extractLedgerTrace,
   defineAction,
@@ -23,20 +23,18 @@ import {
 import { createManualApprovalController } from "./testUtils";
 import { undoToastLabelForRecord } from "./trail";
 
-const hexSchema = createStrictObjectSchema<{ hex: string }>(["hex"], (input) => {
-  if (typeof input.hex !== "string") {
-    throw new Error("hex must be a string.");
-  }
-
-  return { hex: input.hex };
+const hexSchema = compileSchema<{ hex: string }>({
+  type: "object",
+  properties: { hex: { type: "string" } },
+  required: ["hex"],
+  additionalProperties: false,
 });
 
-const valueSchema = createStrictObjectSchema<{ value: string }>(["value"], (input) => {
-  if (typeof input.value !== "string") {
-    throw new Error("value must be a string.");
-  }
-
-  return { value: input.value };
+const valueSchema = compileSchema<{ value: string }>({
+  type: "object",
+  properties: { value: { type: "string" } },
+  required: ["value"],
+  additionalProperties: false,
 });
 
 function paletteAction(): ActionDeclaration<{ hex: string }, { accent: string }> {

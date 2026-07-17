@@ -12,10 +12,19 @@ import {
   type ActionDeclaration,
 } from "./index.js";
 
-const valueSchema = createStrictObjectSchema<{ value: string }>(["value"], (input) => {
-  if (typeof input.value !== "string") throw new Error("value must be a string");
-  return { value: input.value };
-});
+const valueSchema = createStrictObjectSchema<{ value: string }>(
+  ["value"],
+  (input) => {
+    if (typeof input.value !== "string") throw new Error("value must be a string");
+    return { value: input.value };
+  },
+  {
+    type: "object",
+    properties: { value: { type: "string" } },
+    required: ["value"],
+    additionalProperties: false,
+  },
+);
 
 function action(
   id: string,
@@ -258,7 +267,9 @@ describe("SA-EXEC and SA-LED core", () => {
     const undo = await run.undoAll();
     expect(undo.status).toBe("partial");
     expect(store.read("design.value")).toBe("before");
-    expect(run.getRecord().disclosures.some((item) => item.kind === "partial_undo")).toBe(true);
+    expect((await run.getRecord()).disclosures.some((item) => item.kind === "partial_undo")).toBe(
+      true,
+    );
   });
 
   it("uses one whole-plan approval for a plan-preview policy outcome", async () => {
