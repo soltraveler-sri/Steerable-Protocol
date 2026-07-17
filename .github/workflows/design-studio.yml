@@ -20,6 +20,7 @@ jobs:
             evals/package-lock.json
       - run: npm ci
       - run: npm run format:check
+      - run: npm run coverage:check
       - run: npm run build
       - run: npm run typecheck:tests
       - run: npm run test
