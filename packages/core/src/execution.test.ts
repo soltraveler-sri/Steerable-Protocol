@@ -267,7 +267,9 @@ describe("SA-EXEC and SA-LED core", () => {
     const undo = await run.undoAll();
     expect(undo.status).toBe("partial");
     expect(store.read("design.value")).toBe("before");
-    expect(run.getRecord().disclosures.some((item) => item.kind === "partial_undo")).toBe(true);
+    expect((await run.getRecord()).disclosures.some((item) => item.kind === "partial_undo")).toBe(
+      true,
+    );
   });
 
   it("uses one whole-plan approval for a plan-preview policy outcome", async () => {

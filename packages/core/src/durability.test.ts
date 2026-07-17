@@ -104,7 +104,7 @@ function durableLedger(
     updateUndoAttempt: wrap("updateUndoAttempt"),
     requireRecord: wrap("requireRecord"),
     getRecords: wrap("getRecords"),
-    subscribe: (listener) => inner.subscribe(listener),
+    subscribe: (listener: () => void) => inner.subscribe(listener),
   } as unknown as ActionLedger;
   return { ledger, inner, calls };
 }
