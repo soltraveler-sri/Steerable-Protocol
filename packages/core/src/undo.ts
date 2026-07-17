@@ -185,12 +185,27 @@ export async function runUndoHandle(
   handle: UndoHandleRecord,
   context: ActionExecutionContext,
 ): Promise<UndoOneResult> {
+  // SA-LED-077 / SA-LED-146: a superseded, expired, failed, or otherwise non-available handle is
+  // hard-refused here, before any executable behavior is reconstructed — there is no "undo anyway"
+  // bypass, because a superseded handle's effect belongs to a later recorded intent. The recorded
+  // `invalidationReason` (e.g. the superseding record/step) is surfaced so the refusal is legible
+  // rather than a bare status.
   if (handle.status !== "available")
     return {
       handleId: handle.handleId,
       status: handle.status,
-      errorSummary: `Undo handle is ${handle.status}.`,
+      errorSummary: handle.invalidationReason
+        ? `Undo handle is ${handle.status}: ${handle.invalidationReason}`
+        : `Undo handle is ${handle.status}.`,
     };
+  // SA-LED-096 / SA-LED-146: expiry is time-driven with no witnessing event, so it is enforced
+  // lazily at undo time. An available handle past its window is refused and marked expired rather
+  // than run against stale state or left exposing stale availability.
+  if (handle.expiresAt && Date.parse(handle.expiresAt) <= context.now().getTime()) {
+    const reason = `Undo handle expired at ${handle.expiresAt}.`;
+    await ledger.expireUndoHandle(handle.handleId, reason);
+    return { handleId: handle.handleId, status: "expired", errorSummary: reason };
+  }
   const executable = makeExecutableHandle(handle, context);
   if ("nonExecutableReason" in executable)
     return {
@@ -278,16 +293,37 @@ export async function undoAll(
     [...unavailable.map((step) => step.stepId), ...failed],
   );
 
+  // SA-LED-077 / SA-LED-146: a not-reversed step must not be disclosed as a silent success. The
+  // reason a handle could not run — the superseding record/step for a superseded handle, the
+  // expiry, or a runtime failure — is carried into the disclosure so `undoAll` can never report
+  // `succeeded` while an intersecting later intent quietly kept a step from being reversed.
+  function reasonFor(stepId: string): string | undefined {
+    const step = succeeded.find((entry) => entry.stepId === stepId);
+    if (step && "handleId" in step.undo && step.undo.invalidationReason)
+      return step.undo.invalidationReason;
+    const handleId = step && "handleId" in step.undo ? step.undo.handleId : undefined;
+    return handleId
+      ? results.find((result) => result.handleId === handleId && result.errorSummary)?.errorSummary
+      : undefined;
+  }
+
   async function settle(
     status: UndoAllResult["status"],
     undoneStepIds: string[],
     notUndoneStepIds: string[],
   ): Promise<UndoAllResult> {
+    const reasons = notUndoneStepIds
+      .map((stepId) => {
+        const reason = reasonFor(stepId);
+        return reason ? `${stepId}: ${reason}` : undefined;
+      })
+      .filter((entry): entry is string => entry !== undefined);
     const disclosure =
       status === "succeeded"
         ? undefined
         : `Partial undo: reversed ${undoneStepIds.join(", ") || "none"}; ` +
-          `not reversed ${notUndoneStepIds.join(", ") || "none"}.`;
+          `not reversed ${notUndoneStepIds.join(", ") || "none"}.` +
+          (reasons.length ? ` Reasons — ${reasons.join("; ")}.` : "");
     await ledger.updateUndoAttempt(recordId, attempt.undoAttemptId, {
       status,
       settledAt: new Date().toISOString(),

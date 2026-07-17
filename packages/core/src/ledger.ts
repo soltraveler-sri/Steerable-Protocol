@@ -168,6 +168,22 @@ export interface ActionLedger {
     handleId: string,
     patch: Partial<UndoHandleRecord>,
   ): MaybePromise<UndoHandleRecord>;
+  /**
+   * Marks a handle expired with a visible reason, so a time-expired handle never keeps stale
+   * availability. Implements SA-LED-096 and SA-LED-146.
+   */
+  expireUndoHandle(handleId: string, reason: string): MaybePromise<void>;
+  /**
+   * Marks a handle superseded with a visible reason when a later successful step overwrites its
+   * state, so no stale successful undo promise survives. Implements SA-LED-077 and SA-LED-146.
+   */
+  supersedeUndoHandle(handleId: string, reason: string): MaybePromise<void>;
+  /**
+   * Returns every currently `available` undo handle whose `stateKeys` intersect the supplied keys,
+   * across all invocation records. This is the index the engine's eager cross-invocation supersession
+   * sweep needs so a durable backend can query rather than scan every record. Implements SA-LED-077.
+   */
+  findAvailableUndoHandles(stateKeys: StateKey[]): MaybePromise<UndoHandleRecord[]>;
   appendDisclosure(
     recordId: string,
     disclosure: Omit<DisclosureRecord, "disclosureId">,
@@ -316,6 +332,27 @@ export class InMemoryLedger implements ActionLedger {
   /** Marks a stale handle superseded with a visible reason. Implements SA-LED-077 and SA-LED-146. */
   supersedeUndoHandle(handleId: string, reason: string): void {
     this.updateHandle(handleId, { status: "superseded", invalidationReason: reason });
+  }
+  /**
+   * Returns every `available` undo handle whose state keys intersect `stateKeys`, across all records.
+   *
+   * The engine's post-success supersession sweep (SA-LED-077) uses this to find the stale handles a
+   * later successful write invalidates without scanning every step itself; a durable backend can
+   * satisfy the same contract with a state-key index. Implements SA-LED-077.
+   */
+  findAvailableUndoHandles(stateKeys: StateKey[]): UndoHandleRecord[] {
+    const keys = new Set(stateKeys);
+    if (keys.size === 0) return [];
+    const matches: UndoHandleRecord[] = [];
+    for (const record of this.records.values())
+      for (const step of record.steps)
+        if (
+          "handleId" in step.undo &&
+          step.undo.status === "available" &&
+          step.undo.stateKeys.some((key) => keys.has(key))
+        )
+          matches.push(step.undo);
+    return matches;
   }
   /** Appends a user-relevant limitation disclosure. Implements SA-LED-037 and SA-LED-140. */
   appendDisclosure(

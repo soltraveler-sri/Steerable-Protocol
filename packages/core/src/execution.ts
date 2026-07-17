@@ -71,10 +71,20 @@ export interface ApprovalRequest {
   undoImplications: string;
   signal?: AbortSignal;
 }
-/** Host decision for exactly the supplied approval scope. Implements SA-EXEC-094–096 and SA-EXEC-132–136. */
+/**
+ * Host decision for exactly the supplied approval scope.
+ *
+ * `canceled` exists so a hook honoring `request.signal` — a user invoking aggregate undo mid-gate —
+ * can report an honest cancellation instead of fabricating a `declined` the user never made. It
+ * settles the held scope as `canceled` (never `succeeded`) and records a `canceled` approval, making
+ * SA-LED-036's already-declared `canceled` approval vocabulary reachable.
+ *
+ * Implements SA-EXEC-088, SA-EXEC-094–096, SA-EXEC-132–136, and SA-LED-036.
+ */
 export type ApprovalDecision =
   | { status: "approved"; approvedBy?: string; reason?: string }
-  | { status: "declined"; declinedBy?: string; reason?: string };
+  | { status: "declined"; declinedBy?: string; reason?: string }
+  | { status: "canceled"; canceledBy?: string; reason?: string };
 /**
  * Host-owned approval UI or service seam.
  *
@@ -412,10 +422,40 @@ export class ExecutionEngine {
     let approvedSuffixAt: number | undefined;
     let approvalController: AbortController | undefined;
     let active: { controller: AbortController; settled: Promise<void> } | undefined;
+    // A gate is a settleable segment just like an in-flight step: `pendingGate` resolves when the
+    // current gate has fully settled, so undo-all can *await* it rather than race it (SA-EXEC-088).
+    let pendingGate: Promise<void> | undefined;
+    /**
+     * Runs one gate with its settlement registered, so undo-all can await it, and always clears the
+     * pending handle even if the gate throws. Implements SA-EXEC-088 and SA-EXEC-092–096.
+     */
+    const runGate = async (
+      held: CompiledStep[],
+      decision: PolicyDecision,
+      start: number,
+    ): Promise<ChainExecutionResult | undefined> => {
+      let settleGate!: () => void;
+      pendingGate = new Promise<void>((resolve) => {
+        settleGate = resolve;
+      });
+      try {
+        return await this.gate(record.recordId, held, decision, start, (controller) => {
+          approvalController = controller;
+        });
+      } finally {
+        pendingGate = undefined;
+        settleGate();
+      }
+    };
     const undoAll = async () => {
       undoRequested = true;
       approvalController?.abort();
       active?.controller.abort();
+      // SA-EXEC-088: await gate settlement instead of racing it. When undo-all lands during a held
+      // gate, `active` is undefined, so the previous code awaited nothing and returned
+      // `succeeded`/`[]` while the held step then ran. Awaiting the pending gate lets the held step
+      // settle as `canceled` first, so the reported outcome and the ledger agree.
+      if (pendingGate) await pendingGate.catch(() => undefined);
       await this.markUnstarted(record.recordId, steps, "canceled");
       if (active) await active.settled.catch(() => undefined);
       return undoAllRecord(this.options.ledger, record.recordId, this.context(currentSurface), {
@@ -435,10 +475,11 @@ export class ExecutionEngine {
           });
         }
         if (chainPolicy.finalMode === "Plan preview") {
-          const gate = await this.gate(record.recordId, steps, chainPolicy, 0, (controller) => {
-            approvalController = controller;
-          });
+          const gate = await runGate(steps, chainPolicy, 0);
           if (gate) return gate;
+          // SA-EXEC-088: undo-all may have landed while this gate was held. A held step is
+          // not-yet-started, so it MUST NOT run; settle canceled before building any executor.
+          if (undoRequested) return await this.settleCanceled(record.recordId, steps);
         }
         for (let index = 0; index < steps.length; index += 1) {
           const step = steps[index];
@@ -461,32 +502,24 @@ export class ExecutionEngine {
             stepPolicy.finalMode === "Gated suffix" &&
             approvedSuffixAt === undefined
           ) {
-            const gate = await this.gate(
-              record.recordId,
-              steps.slice(index),
-              chainPolicy,
-              index,
-              (controller) => {
-                approvalController = controller;
-              },
-            );
+            const gate = await runGate(steps.slice(index), chainPolicy, index);
             if (gate) return gate;
+            // SA-EXEC-088: re-check after the gate — undo-all during the held gate cancels the
+            // not-yet-started suffix before a fresh executor controller is ever built below.
+            if (undoRequested)
+              return await this.settleCanceled(record.recordId, steps.slice(index));
             approvedSuffixAt = index;
           }
           if (chainPolicy.finalMode !== "Plan preview" && stepPolicy.finalMode === "Step-gated") {
-            const gate = await this.gate(
-              record.recordId,
-              [step],
-              stepPolicy,
-              index,
-              (controller) => {
-                approvalController = controller;
-              },
-            );
+            const gate = await runGate([step], stepPolicy, index);
             if (gate) {
               await this.markUnstarted(record.recordId, steps.slice(index + 1), "skipped");
               return gate;
             }
+            // SA-EXEC-088: the held step is not-yet-started; undo-all during its gate must cancel it
+            // rather than fall through to execution.
+            if (undoRequested)
+              return await this.settleCanceled(record.recordId, steps.slice(index));
           }
           const controller = new AbortController();
           const running = this.executeStep(
@@ -683,6 +716,21 @@ export class ExecutionEngine {
       signal: controller.signal,
     });
     setController(undefined);
+    if (answer.status === "canceled") {
+      // SA-EXEC-088 / SA-LED-003: a hook honoring the undo signal cancels the held scope honestly.
+      // The held steps settle as `canceled` (never rewritten to `succeeded`) and the approval is
+      // recorded `canceled` — the vocabulary SA-LED-036 already declares — not a fabricated decline.
+      await this.write("setApproval", () =>
+        this.options.ledger.setApproval(recordId, {
+          status: "canceled",
+          gateId,
+          actionIds: held.map((step) => step.action.id),
+          reason: answer.reason,
+        }),
+      );
+      await this.markUnstarted(recordId, held, "canceled");
+      return this.result(recordId, "canceled");
+    }
     if (answer.status === "declined") {
       await this.write("setApproval", () =>
         this.options.ledger.setApproval(recordId, {
@@ -887,6 +935,12 @@ export class ExecutionEngine {
         await this.write("attachUndoHandle", () =>
           this.options.ledger.attachUndoHandle(recordId, step.stepId, handle),
         );
+      // SA-LED-077: eagerly, in this same post-success write sequence, supersede any still-available
+      // undo handle in *other* invocation records whose state keys this step just overwrote. Doing it
+      // here — not lazily at undo time — is what keeps a stale successful undo promise from staying
+      // visible in every trail and undo affordance for the whole window, and keeps a crash from ever
+      // showing the new effect recorded while a superseded promise still reads as available.
+      await this.supersedeStaleHandles(recordId, step);
       return undefined;
     } catch (error) {
       const canceled = controller.signal.aborted;
@@ -906,6 +960,80 @@ export class ExecutionEngine {
         code: canceled ? "execution_canceled" : "executor_failed",
         message: error instanceof Error ? error.message : String(error),
       };
+    }
+  }
+  /**
+   * Supersedes every still-available undo handle in *other* invocation records whose state keys the
+   * just-succeeded step overwrote.
+   *
+   * Scope is cross-invocation only (Fable ruling 2): handles in the *same* record are left alone so
+   * the chain's reverse-order aggregate undo (SA-LED-110/112) keeps composing. A superseded handle is
+   * a persisted status transition on the handle record (SA-LED-077), not runtime-memory state, so it
+   * survives restart and shows up in a durable trail; `runUndoHandle` then hard-refuses it.
+   *
+   * The supersede write is a post-success "later fact" (SA-LED-003 permits it, SA-LED-142 governs it).
+   * If it fails, the step already ran and MUST NOT be retroactively failed; but leaving stale
+   * availability would violate SA-LED-146, so the failure is disclosed as `degraded_ledger` and
+   * surfaced rather than swallowed.
+   *
+   * Implements SA-LED-077, SA-LED-146, SA-LED-003, and SA-LED-142.
+   */
+  private async supersedeStaleHandles(recordId: string, step: CompiledStep): Promise<void> {
+    if (step.action.writes.length === 0) return;
+    // The whole sweep is a post-success later fact: the step already ran, so nothing here may throw
+    // back into `executeStep` and retroactively fail it (SA-LED-003). Any failure — the query itself
+    // or an individual supersede write — is disclosed as `degraded_ledger` (SA-LED-146) and swallowed.
+    try {
+      const stale = (await this.options.ledger.findAvailableUndoHandles(step.action.writes)).filter(
+        (handle) => handle.recordId !== recordId,
+      );
+      for (const handle of stale) {
+        const overlap = handle.stateKeys.filter((key) => step.action.writes.includes(key));
+        const reason =
+          `Superseded by step ${step.stepId} of ${recordId} (${step.action.id}), which overwrote ` +
+          `shared state ${overlap.join(", ")}. Undoing this handle would destroy that later effect.`;
+        try {
+          await this.options.ledger.supersedeUndoHandle(handle.handleId, reason);
+        } catch (error) {
+          await this.discloseDegradedSupersede(recordId, step, handle, overlap, error);
+        }
+      }
+    } catch (error) {
+      // The state-key query itself failed; stale handles across other records may still read as
+      // available. Disclose the degraded state against this record rather than failing the step.
+      await this.discloseDegradedSupersede(
+        recordId,
+        step,
+        undefined,
+        [...step.action.writes],
+        error,
+      );
+    }
+  }
+  /** Records a best-effort `degraded_ledger` disclosure for a failed supersession. Implements SA-LED-146. */
+  private async discloseDegradedSupersede(
+    recordId: string,
+    step: CompiledStep,
+    handle: { handleId: string; recordId: string } | undefined,
+    keys: StateKey[],
+    error: unknown,
+  ): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error);
+    const target = handle
+      ? `stale undo handle "${handle.handleId}" of ${handle.recordId}`
+      : `stale undo handles overlapping ${keys.join(", ")}`;
+    try {
+      await this.options.ledger.appendDisclosure(recordId, {
+        kind: "degraded_ledger",
+        message:
+          `Could not supersede ${target} after ${step.action.id} overwrote ${keys.join(", ")}: ` +
+          `${message}. Those handles may still read as available; undoing one would destroy this ` +
+          `step's effect.`,
+        stepIds: [step.stepId],
+      });
+    } catch {
+      // The ledger is unreachable for the disclosure too; the step still genuinely ran, so it is not
+      // retroactively failed (SA-LED-003). Nothing further can be recorded here.
     }
   }
   private context(surfaceId: SurfaceId, signal?: AbortSignal): ActionExecutionContext {
@@ -938,6 +1066,20 @@ export class ExecutionEngine {
           }),
         );
     }
+  }
+  /**
+   * Settles a chain as canceled after aggregate undo landed during a gate, marking the remaining
+   * not-yet-started steps canceled first so no held step is left runnable and the chain outcome is
+   * internally consistent (`canceled` chain with `canceled`/`skipped` steps, never a `succeeded`
+   * step). `markUnstarted` only patches `proposed`/`held` steps, so it composes safely with the
+   * marking undo-all performs concurrently. Implements SA-EXEC-088, SA-EXEC-012, and SA-LED-003.
+   */
+  private async settleCanceled(
+    recordId: string,
+    remaining: CompiledStep[],
+  ): Promise<ChainExecutionResult> {
+    await this.markUnstarted(recordId, remaining, "canceled");
+    return this.result(recordId, "canceled");
   }
   private async result(
     recordId: string,
