@@ -11,6 +11,8 @@ This document distills the Steerable Apps specification suite into observable ch
 
 The checklist is intentionally execution-oriented. Each checklist item cites the requirement IDs it verifies, states a single independently checkable assertion, gives a "how to look" procedure, and assigns a severity. Spec gaps discovered while writing the checks are listed instead of patched inline.
 
+Most rows can be located statically, but static reading is not sufficient evidence for a conformance claim. Rows whose assertion is about behavior — surfaces registering and deregistering, execution stopping instead of continuing, undo executing, facts reaching the model, the router emitting a route — remain Inconclusive under section 2 until that behavior is observed on the running target. `skills/integration-audit/references/live-pass.md` defines the minimum set of runtime observations, the artifacts each must produce, and how they map onto targets that are not web apps; an audit that cannot make them reports Inconclusive rather than a pass. This is a division `SA-CONF-098` already draws: evidence must be item-level and reproducible, while which probe supplies it depends on the product.
+
 ## 2. Result Vocabulary (Normative)
 
 An auditor reports each checklist item with one of these result values:

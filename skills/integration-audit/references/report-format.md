@@ -15,9 +15,12 @@ Required fields:
 - `scope`
 - `partial_coverage`
 - `commands_run`
+- `live_pass`
 - `overall_verdict`
 
 `partial_coverage` is `none` only when the target scope was covered honestly. Otherwise include included paths, excluded paths, and affected SA-CONF ranges.
+
+`live_pass` is `complete`, `partial`, or `not run`. It is `complete` only when `LP-1` through `LP-5` are each `Pass` or a justified `Not applicable`. `overall_verdict` cannot report a passing conformance claim unless `live_pass` is `complete`.
 
 ## Integration Map
 
@@ -36,6 +39,34 @@ List discovered seams with evidence:
 - external bridge, if any
 
 Each seam entry uses `path:line` evidence or `not found after <searches>`.
+
+## Live Pass Record
+
+Place this before the item table. See `references/live-pass.md` for the checks and the evidence standard.
+
+Preflight fields:
+
+- `build_sha`: the commit the running target was built from; must equal HEAD of the audited scope
+- `drive_channel`: how the target was driven
+- `datastore_identity`: the real store `LP-2` wrote to, and how it is known not to be a double
+- `datastore_authorization`: non-production, or the human's explicit authorization
+- `surface_inventory`: every surface ID from the registry's surface declarations
+
+One row per check:
+
+| Check | Result | Channel | Artifact | Justification / Blocker |
+| --- | --- | --- | --- | --- |
+| `LP-1` | | | | |
+| `LP-2` | | | | |
+| `LP-3` | | | | |
+| `LP-4` | | | | |
+| `LP-5` | | | | |
+
+- `Result` uses the checklist result vocabulary: `Pass`, `Fail`, `Not applicable`, `Inconclusive`.
+- `Artifact` is what was observed — verbatim error-stream output, the three datastore reads, the two fact snapshots, the provider response identifier and routed output. An assertion that the code is correct is not an artifact; a check with no artifact is `Inconclusive`.
+- `Justification / Blocker` is required for `Not applicable` (the structural absence, cited from a declaration) and for `Inconclusive` (`blocker`, `attempted`, `unblock`, `verdict_effect`).
+
+Every `Fail` and every `Inconclusive` also gets a full finding below, with `severity: blocker` or `severity: claim-blocking-inconclusive`.
 
 ## Severity Scale
 
