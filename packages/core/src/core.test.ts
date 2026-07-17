@@ -135,6 +135,13 @@ describe("SA-DECL registry compilation", () => {
       () => new CapabilityRegistry({ actions: [{ ...action(), execute: undefined } as never] }),
     ],
     [
+      "snapshot reversibility with empty writes (B10)",
+      () =>
+        new CapabilityRegistry({
+          actions: [{ ...action(), reversibility: { kind: "snapshot" }, writes: [] } as never],
+        }),
+    ],
+    [
       "invalid value set member",
       () => new CapabilityRegistry({ actions: [{ ...action(), risk: "risky" } as never] }),
     ],

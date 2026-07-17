@@ -1207,6 +1207,14 @@ export class CapabilityRegistry {
       this.fail("missing_execute", `Action \"${declaration.id}\" must declare an executor.`);
     if (declaration.reversibility.kind === "undoable" && typeof declaration.undo !== "function")
       this.fail("missing_undo", `Undoable action \"${declaration.id}\" must declare undo.`);
+    if (declaration.reversibility.kind === "snapshot" && declaration.writes.length === 0)
+      this.fail(
+        "snapshot_without_writes",
+        `Snapshot-reversible action \"${declaration.id}\" must declare the state keys it writes: ` +
+          `snapshot undo captures and restores exactly those keys, so an empty writes list makes the ` +
+          `declared reversibility unrecoverable. Declare writes, or use reversibility.kind "irreversible" ` +
+          `with an honest no-undo reason. Implements SA-EXEC-010 and SA-DECL-039.`,
+      );
     if (
       declaration.effects.cost !== "none" &&
       (declaration.risk === "safe" || declaration.risk === "side_effect")
