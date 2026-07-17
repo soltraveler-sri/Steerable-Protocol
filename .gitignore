@@ -16,3 +16,6 @@ coverage/
 *.dylib
 *.node
 *.tsbuildinfo
+
+# Claude Code agent worktrees and local session state
+.claude/
