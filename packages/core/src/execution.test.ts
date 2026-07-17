@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ExecutionEngine,
   InMemoryLedger,
@@ -605,6 +605,193 @@ describe("B2 — gate/undo cancellation race (SA-EXEC-088, SA-LED-003)", () => {
     // fabricated decline the user never made.
     expect(done.record.approval.status).toBe("canceled");
     expect(done.record.steps[0].status).toBe("canceled");
+  });
+});
+
+// N10 (second cold audit): the approval gate must be able to *expire*. B2 made `canceled`
+// reachable; `expired` was still dead vocabulary because the gate awaited the host `ApprovalHook`
+// with no bound, so a user who never answers holds the record at `pending` and the steps at `held`
+// forever. A finite `approvalTimeoutMs` — the approval-gate analogue of the SA-EXEC-166/167
+// readiness bound — settles the gate `expired`, making `SA-LED-036`'s declared `expired` vocabulary
+// reachable. These three tests prove expired, canceled, and declined are three DISTINCT terminal
+// states, and that the default (no bound) leaves the pre-N10 indefinite wait unchanged.
+describe("N10 — bounded approval-gate timeout (SA-LED-036, SA-EXEC-166–167 precedent)", () => {
+  // Same site B2 targets: creative-tool + destructive + irreversible resolves to Step-gated, an
+  // in-loop gate — the structural twin of the cross-surface readiness wait that already has a bound.
+  function gatedAction(execute: () => string) {
+    return action("project.export_file", {
+      risk: "destructive",
+      reversibility: { kind: "irreversible" },
+      effects: { external: false, cost: "none", sensitive: false },
+      undo: undefined,
+      execute,
+    });
+  }
+
+  it("expires a never-answered gate: approval expired, held step skipped, chain expired — deterministically", async () => {
+    // Deterministic time control: fake timers make the awaited timeout timer, not wall-clock, the
+    // thing that settles the chain. The hook below NEVER resolves, so the ONLY path to settlement is
+    // the timeout firing — a settlement for any other reason (a stray microtask) is impossible here,
+    // which is what closes the "passes without the timer firing" trap.
+    vi.useFakeTimers();
+    try {
+      let reached!: () => void;
+      const atGate = new Promise<void>((resolve) => {
+        reached = resolve;
+      });
+      let executed = false;
+      const planned = gatedAction(() => {
+        executed = true;
+        return "exported";
+      });
+      const core = registry([planned], { editor: [planned.id] });
+      const ledger = new InMemoryLedger();
+      const engine = new ExecutionEngine({
+        registry: core,
+        ledger,
+        snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
+        approvalTimeoutMs: 1000,
+        approvalHook: () => {
+          reached();
+          return new Promise<never>(() => {}); // never answers; only the timeout can settle the gate
+        },
+      });
+      const run = await engine.executeChain({
+        intent: "export",
+        surfaceId: "editor",
+        posture: "creative-tool",
+        steps: [{ actionId: planned.id, params: { value: "out" } }],
+      });
+      await atGate; // synchronize on observed state: the gate is genuinely pending and the timer armed
+      await vi.advanceTimersByTimeAsync(1000); // advance the awaited timer past the bound
+      const done = await run.done;
+
+      expect(executed).toBe(false); // the held step never ran
+      expect(done.status).toBe("expired"); // legible, distinct terminal outcome
+      expect(done.record.approval.status).toBe("expired"); // SA-LED-036 vocabulary, now reachable
+      expect(done.record.steps[0].status).toBe("skipped"); // held → skipped on expiry, not canceled
+      // Distinctness: expiry fabricates neither a decline nor a cancellation the user never made.
+      expect(done.record.approval.status).not.toBe("declined");
+      expect(done.record.approval.status).not.toBe("canceled");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reports aggregate undo mid-gate as canceled, never expired, even with a bound configured", async () => {
+    let reached!: () => void;
+    const atGate = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    let executed = false;
+    const planned = gatedAction(() => {
+      executed = true;
+      return "exported";
+    });
+    const core = registry([planned], { editor: [planned.id] });
+    const ledger = new InMemoryLedger();
+    const engine = new ExecutionEngine({
+      registry: core,
+      ledger,
+      snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
+      // A generous bound is armed but MUST NOT win: the real cancellation answer settles first and
+      // clears the timer. Real timers here; the hook resolves synchronously on abort.
+      approvalTimeoutMs: 60_000,
+      approvalHook: (request) =>
+        new Promise((resolve) => {
+          reached();
+          request.signal?.addEventListener(
+            "abort",
+            () => resolve({ status: "canceled", reason: "user invoked undo mid-gate" }),
+            { once: true },
+          );
+        }),
+    });
+    const run = await engine.executeChain({
+      intent: "export",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [{ actionId: planned.id, params: { value: "out" } }],
+    });
+    await atGate;
+    const undo = run.undoAll();
+    const done = await run.done;
+    await undo;
+
+    expect(executed).toBe(false);
+    expect(done.status).toBe("canceled"); // B2 cancellation, not expiry
+    expect(done.status).not.toBe("expired");
+    expect(done.record.approval.status).toBe("canceled");
+    expect(done.record.steps[0].status).toBe("canceled"); // canceled, distinct from expiry's skipped
+  });
+
+  it("reports a host decline as declined, never expired, with a bound configured", async () => {
+    let executed = false;
+    const planned = gatedAction(() => {
+      executed = true;
+      return "exported";
+    });
+    const core = registry([planned], { editor: [planned.id] });
+    const ledger = new InMemoryLedger();
+    const engine = new ExecutionEngine({
+      registry: core,
+      ledger,
+      snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
+      approvalTimeoutMs: 60_000, // armed, but the immediate decision wins and clears it
+      approvalHook: async () => ({ status: "declined", reason: "no export" }),
+    });
+    const done = await (
+      await engine.executeChain({
+        intent: "export",
+        surfaceId: "editor",
+        posture: "creative-tool",
+        steps: [{ actionId: planned.id, params: { value: "out" } }],
+      })
+    ).done;
+
+    expect(executed).toBe(false);
+    expect(done.status).toBe("declined"); // an answered "no", not an expiry
+    expect(done.status).not.toBe("expired");
+    expect(done.record.approval.status).toBe("declined");
+    expect(done.record.steps[0].status).toBe("skipped");
+  });
+
+  it("leaves the gate wait unbounded when no approvalTimeoutMs is configured (non-breaking default)", async () => {
+    // No bound: the hook resolves only after several real macrotask turns; the gate must wait for the
+    // real answer and settle succeeded, proving the default did not silently introduce an expiry.
+    let reached!: () => void;
+    const atGate = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    let executed = false;
+    const planned = gatedAction(() => {
+      executed = true;
+      return "exported";
+    });
+    const core = registry([planned], { editor: [planned.id] });
+    const engine = new ExecutionEngine({
+      registry: core,
+      ledger: new InMemoryLedger(),
+      snapshotStore: createMemorySnapshotStore({ "design.value": "before" }).adapter,
+      // No approvalTimeoutMs on purpose.
+      approvalHook: async () => {
+        reached();
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return { status: "approved" };
+      },
+    });
+    const run = await engine.executeChain({
+      intent: "export",
+      surfaceId: "editor",
+      posture: "creative-tool",
+      steps: [{ actionId: planned.id, params: { value: "out" } }],
+    });
+    await atGate;
+    const done = await run.done;
+
+    expect(done.status).toBe("succeeded");
+    expect(executed).toBe(true);
+    expect(done.record.approval.status).toBe("approved");
   });
 });
 

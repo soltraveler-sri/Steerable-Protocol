@@ -21,6 +21,13 @@ import { createUndoHandleForAction, undoAll as undoAllRecord, type UndoAllResult
 
 /** Default finite destination-readiness wait in milliseconds. Implements SA-EXEC-166–167. */
 export const DEFAULT_SURFACE_READINESS_TIMEOUT_MS = 5000;
+/**
+ * Engine-internal sentinel returned by the approval wait when its finite bound elapses before the
+ * host answers. It is intentionally *not* an `ApprovalDecision`: expiry is derived by the engine,
+ * never a host decision, so it cannot be confused with an `approved`/`declined`/`canceled` answer
+ * the host actually returned. Implements SA-LED-036.
+ */
+const APPROVAL_EXPIRED = Symbol("approval-expired");
 /** Target surface, required actions, and cancellation bounds for a readiness wait. Implements SA-EXEC-163–168. */
 export interface SurfaceReadinessRequest {
   targetSurfaceId: SurfaceId;
@@ -192,10 +199,20 @@ export interface ExecuteActionRequest extends Omit<ExecuteChainRequest, "steps">
   targetSurfaceId?: SurfaceId;
   surfaceTimeoutMs?: number;
 }
-/** Settled execution status with its authoritative ledger record. Implements SA-EXEC-009 and SA-EXEC-012. */
+/**
+ * Settled execution status with its authoritative ledger record.
+ *
+ * `expired` is the terminal state for a gate whose bounded approval wait elapsed before the host
+ * answered (see `ExecutionEngine`'s `approvalTimeoutMs`). It is a distinct outcome from `declined`
+ * (the host answered "no") and `canceled` (aggregate undo cut the gate short): the held scope did
+ * not run and no host decision was ever made, so the honest record is `expired`, the `SA-LED-036`
+ * approval vocabulary that B2 left declared-but-unreachable.
+ *
+ * Implements SA-EXEC-009, SA-EXEC-012, and SA-LED-036.
+ */
 export interface ChainExecutionResult {
   recordId: string;
-  status: "succeeded" | "failed" | "declined" | "canceled" | "refused";
+  status: "succeeded" | "failed" | "declined" | "canceled" | "refused" | "expired";
   record: SteeringInvocationRecord;
   failure?: { stepId?: string; code: string; message: string };
 }
@@ -316,6 +333,7 @@ export class ExecutionEngine {
   private readonly readiness: SurfaceReadiness;
   private readonly now: () => Date;
   private readonly approval: ApprovalHook;
+  private readonly approvalTimeoutMs: number | undefined;
   private readonly preExecution: PreExecutionHook;
   /**
    * Creates an engine around host-owned registry, ledger, snapshot, readiness, approval, and
@@ -328,6 +346,24 @@ export class ExecutionEngine {
       snapshotStore?: StateSnapshotAdapter;
       surfaceReadiness?: SurfaceReadiness;
       approvalHook?: ApprovalHook;
+      /**
+       * Finite upper bound, in milliseconds, on how long a gate waits for the host `ApprovalHook`
+       * before the wait *expires*: the approval is recorded `expired`, its held steps are marked
+       * `skipped`, and the chain settles `expired` (`SA-LED-036`). This is the approval-gate analogue
+       * of `DEFAULT_SURFACE_READINESS_TIMEOUT_MS` for the cross-surface readiness wait
+       * (`SA-EXEC-166`/`SA-EXEC-167`), and it exists so a server adopter awaiting `executeChain().done`
+       * across an HTTP request whose user closes the tab or never answers does not hold the promise,
+       * the record at `pending`, and the steps at `held` forever — the "stale approvals" door-two
+       * blocker named in `SA-BRIDGE` §11.
+       *
+       * Unlike surface readiness — whose finite bound and 5000 ms default are a normative MUST
+       * (`SA-EXEC-166`/`SA-EXEC-167`) because it waits on a surface mounting — an approval waits on a
+       * *human*, and no spec requirement bounds that wait to any particular value. So the default is
+       * deliberately `undefined` (equivalently `Infinity`): **no timeout**, preserving the pre-N10
+       * indefinite wait byte-for-byte for every existing caller and keeping the change non-breaking.
+       * A host that needs the bound opts in by supplying a finite value.
+       */
+      approvalTimeoutMs?: number;
       /** Host barrier run immediately before each executor call. Implements SA-LED-141. */
       preExecutionHook?: PreExecutionHook;
       now?: () => Date;
@@ -338,6 +374,7 @@ export class ExecutionEngine {
     this.approval =
       options.approvalHook ??
       (async () => ({ status: "declined" as const, reason: "no_approval_hook_attached" }));
+    this.approvalTimeoutMs = options.approvalTimeoutMs;
     this.preExecution = options.preExecutionHook ?? (() => undefined);
   }
   /**
@@ -709,6 +746,37 @@ export class ExecutionEngine {
     }
     return this.result(recordId, "refused", failure);
   }
+  /**
+   * Waits for the host approval decision under the engine's configured finite bound.
+   *
+   * With no `approvalTimeoutMs` configured (the default), this is exactly `await this.approval(...)`:
+   * the pre-N10 indefinite wait, byte-for-byte, so every existing caller and gate test is unchanged.
+   * With a finite bound, the host decision races a timer; whichever settles first wins. A real answer
+   * clears the timer (in `finally`, so a rejected hook clears it too and its rejection still
+   * propagates, settling the chain `failed` exactly as before). If the timer wins, the wait expired
+   * and the caller records the honest `expired` outcome. This composes with B2's cancellation model:
+   * `request.signal` still fires only for aggregate undo, so a signal-honoring hook can still resolve
+   * `canceled` — a decision that wins the same race — and expiry never masquerades as cancellation.
+   *
+   * Implements SA-LED-036 and mirrors the SA-EXEC-166–167 readiness-timeout defaulting discipline.
+   */
+  private async awaitApproval(
+    request: ApprovalRequest,
+  ): Promise<ApprovalDecision | typeof APPROVAL_EXPIRED> {
+    const timeoutMs = this.approvalTimeoutMs;
+    if (timeoutMs === undefined || timeoutMs === Infinity) return this.approval(request);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race<ApprovalDecision | typeof APPROVAL_EXPIRED>([
+        this.approval(request),
+        new Promise<typeof APPROVAL_EXPIRED>((resolve) => {
+          timer = setTimeout(() => resolve(APPROVAL_EXPIRED), timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
   private async gate(
     recordId: string,
     held: CompiledStep[],
@@ -737,7 +805,7 @@ export class ExecutionEngine {
     );
     const controller = new AbortController();
     setController(controller);
-    const answer = await this.approval({
+    const answer = await this.awaitApproval({
       gateId,
       recordId,
       mode: decision.requiredGate?.mode ?? decision.finalMode,
@@ -754,6 +822,25 @@ export class ExecutionEngine {
       signal: controller.signal,
     });
     setController(undefined);
+    if (answer === APPROVAL_EXPIRED) {
+      // SA-LED-036 / SA-EXEC-166–167 precedent: the bounded approval wait elapsed with no host
+      // answer. Expiry is a distinct terminal state from `canceled` (aggregate undo) and `declined`
+      // (a "no" the host actually gave). The approval is recorded `expired` — not a fabricated
+      // `declined`, the exact dishonesty B2 removed — the held steps are `skipped` (they never ran
+      // and no one canceled them), and the chain settles `expired`. The host hook promise is
+      // abandoned, never rejected; the engine does not abort `controller` here, so `request.signal`
+      // keeps meaning exactly "aggregate-undo cancellation" as B2 defined it, never expiry.
+      await this.write("setApproval", () =>
+        this.options.ledger.setApproval(recordId, {
+          status: "expired",
+          gateId,
+          actionIds: held.map((step) => step.action.id),
+          reason: `Approval was not answered within ${this.approvalTimeoutMs} ms.`,
+        }),
+      );
+      await this.markUnstarted(recordId, held, "skipped");
+      return this.result(recordId, "expired");
+    }
     if (answer.status === "canceled") {
       // SA-EXEC-088 / SA-LED-003: a hook honoring the undo signal cancels the held scope honestly.
       // The held steps settle as `canceled` (never rewritten to `succeeded`) and the approval is
