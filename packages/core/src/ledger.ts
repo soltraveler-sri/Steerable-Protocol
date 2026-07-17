@@ -199,20 +199,38 @@ export class InMemoryLedger implements ActionLedger {
   private decisionSequence = 0;
   private disclosureSequence = 0;
   private undoAttemptSequence = 0;
-  /** Creates a session ledger with optional clock and redaction policy. Implements SA-LED-130–134 and SA-LED-144. */
+  /**
+   * Creates a session ledger with optional clock, redaction policy, and ID factory.
+   *
+   * `idFactory` overrides the per-instance sequence used for synthetic record/decision/disclosure/
+   * undo-attempt IDs, minting `${prefix}_${idFactory()}` instead of `${prefix}_${n}`. It exists for
+   * durable/multi-instance adopters: this in-memory backend keeps each instance's records in its own
+   * map, so its default sequential IDs never collide *within* it, but any backend sharing a durable
+   * key space MUST supply a cross-process-unique factory (e.g. `crypto.randomUUID`) so two instances
+   * or a cold-restarted process cannot re-mint the same primary key (SA-LED-146). The canonical
+   * declaration action ID that SA-LED-009 requires is unaffected — these are record/handle IDs.
+   *
+   * Implements SA-LED-130–134, SA-LED-144, and SA-LED-146.
+   */
   constructor(
     private readonly now: () => Date = () => new Date(),
     private readonly redactor?: LedgerRedactor,
+    private readonly idFactory?: () => string,
   ) {}
+  /** Mints a readable, optionally cross-process-unique ID: `${prefix}_<uuid>` or `${prefix}_<n>`. */
+  private mintId(prefix: string, sequence: number): string {
+    return this.idFactory ? `${prefix}_${this.idFactory()}` : `${prefix}_${sequence}`;
+  }
 
   /** Creates and publishes an ordered invocation record. Implements SA-LED-020–039 and SA-LED-140. */
   createInvocation(input: CreateInvocationInput): SteeringInvocationRecord {
-    const recordId = `inv_${++this.sequence}`;
+    const sequence = ++this.sequence;
+    const recordId = this.mintId("inv", sequence);
     const recordedAt = this.now().toISOString();
     const record: SteeringInvocationRecord = {
       recordId,
       schemaVersion: "steerable-ledger.v0",
-      order: { sequence: this.sequence, recordedAt },
+      order: { sequence, recordedAt },
       surfaceRef: input.surfaceRef,
       initiator: input.initiator ?? { kind: "user" },
       intent: clone(input.intent),
@@ -237,7 +255,7 @@ export class InMemoryLedger implements ActionLedger {
   /** Appends the policy result without conflating later execution state. Implements SA-LED-050–054. */
   appendPolicyDecision(recordId: string, decision: PolicyDecision): PolicyDecisionRecord {
     const policy: PolicyDecisionRecord = {
-      decisionId: `pol_${++this.decisionSequence}`,
+      decisionId: this.mintId("pol", ++this.decisionSequence),
       recordedAt: this.now().toISOString(),
       actionIds: [...decision.actionIds],
       finalMode: decision.finalMode,
@@ -304,7 +322,10 @@ export class InMemoryLedger implements ActionLedger {
     recordId: string,
     disclosure: Omit<DisclosureRecord, "disclosureId">,
   ): DisclosureRecord {
-    const entry = { disclosureId: `disc_${++this.disclosureSequence}`, ...clone(disclosure) };
+    const entry = {
+      disclosureId: this.mintId("disc", ++this.disclosureSequence),
+      ...clone(disclosure),
+    };
     this.requireRecord(recordId).disclosures.push(entry);
     this.emit();
     return entry;
@@ -315,7 +336,7 @@ export class InMemoryLedger implements ActionLedger {
     attempt: Omit<UndoAttemptRecord, "undoAttemptId" | "startedAt">,
   ): UndoAttemptRecord {
     const entry = {
-      undoAttemptId: `undo_${++this.undoAttemptSequence}`,
+      undoAttemptId: this.mintId("undo", ++this.undoAttemptSequence),
       startedAt: this.now().toISOString(),
       ...clone(attempt),
     };
