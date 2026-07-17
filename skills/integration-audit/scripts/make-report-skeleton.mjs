@@ -21,8 +21,8 @@ if (!fs.existsSync(checklistPath)) {
 const checklist = fs.readFileSync(checklistPath, "utf8");
 const rows = parseChecklistRows(checklist);
 
-if (rows.length !== 95) {
-  fail(`Expected 95 SA-CONF rows from section 4, found ${rows.length}.`);
+if (rows.length !== 96) {
+  fail(`Expected 96 SA-CONF rows from section 4, found ${rows.length}.`);
 }
 
 const report = renderReport({ target, checklistPath, rows });

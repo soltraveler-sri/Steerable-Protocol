@@ -3,6 +3,7 @@ import type {
   AnyCompiledActionDeclaration,
   CapabilityRegistry,
   MaybePromise,
+  RegistryAvailabilityView,
   StateKey,
   StateSnapshot,
   StateSnapshotAdapter,
@@ -26,6 +27,13 @@ export interface SurfaceReadinessRequest {
   actionIds: string[];
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * Per-request availability view whose liveness the readiness check reads, instead of the
+   * registry's shared instance state. Optional and backward compatible: when omitted, a
+   * registry-backed readiness reads its own instance liveness (the SPA path). Supplying it keeps a
+   * cross-surface readiness wait scoped to the requesting principal (`SA-DECL-097`).
+   */
+  availability?: RegistryAvailabilityView;
 }
 /** Settled destination readiness or a legible boundary failure. Implements SA-EXEC-169–172 and SA-EXEC-177. */
 export type SurfaceReadinessResult =
@@ -167,6 +175,15 @@ export interface ExecuteChainRequest extends Omit<PolicyInputs, "currentSurface"
   surfaceId: SurfaceId;
   steps: ProposedActionStep[];
   initiator?: SteeringInvocationRecord["initiator"];
+  /**
+   * Per-request availability view the engine resolves policy and re-checks surface availability
+   * against. Optional and backward compatible: when omitted, the engine uses the registry's own
+   * default view (the single-principal SPA path, unchanged). A server that hoists one compiled
+   * registry to a module singleton passes `registry.withLiveness(perRequestState)` so this
+   * invocation's liveness and precondition state are scoped to its principal and never satisfied by
+   * another principal's registrations (`SA-DECL-097`). Implements SA-DECL-097 and SA-POL-104–105.
+   */
+  availability?: RegistryAvailabilityView;
 }
 /** Single-action direct-dispatch request. Implements SA-EXEC-060–068. */
 export interface ExecuteActionRequest extends Omit<ExecuteChainRequest, "steps"> {
@@ -250,7 +267,7 @@ export class RegistrySurfaceReadiness implements SurfaceReadiness {
           ok: false,
           targetSurfaceId: request.targetSurfaceId,
           reason: "canceled",
-          missingActionIds: this.missing(request),
+          missingActionIds: this.missing(request, request.availability ?? this.registry),
         });
       unsubscribe = this.registry.subscribe(() => {
         const next = check();
@@ -261,21 +278,31 @@ export class RegistrySurfaceReadiness implements SurfaceReadiness {
     });
   }
   private check(request: SurfaceReadinessRequest): SurfaceReadinessResult {
-    const missingActionIds = this.missing(request);
+    // Read liveness through the per-request view when one is supplied, so a cross-surface wait for
+    // one principal never observes another principal's registrations (SA-DECL-097). Absent a view,
+    // this reads the registry's own instance liveness, unchanged for the SPA path. The subscription
+    // in `awaitReady` remains instance-based: it is the reactive SPA mechanism for a surface that
+    // mounts asynchronously; a per-request state is fixed for the request and settles on the
+    // immediate check below.
+    const availability = request.availability ?? this.registry;
+    const missingActionIds = this.missing(request, availability);
     return missingActionIds.length === 0
       ? { ok: true, targetSurfaceId: request.targetSurfaceId }
       : {
           ok: false,
           targetSurfaceId: request.targetSurfaceId,
-          reason: this.registry.isSurfaceLive(request.targetSurfaceId)
+          reason: availability.isSurfaceLive(request.targetSurfaceId)
             ? "capability_unavailable"
             : "timeout",
           missingActionIds,
         };
   }
-  private missing(request: SurfaceReadinessRequest): string[] {
+  private missing(
+    request: SurfaceReadinessRequest,
+    availability: RegistryAvailabilityView,
+  ): string[] {
     return request.actionIds.filter(
-      (actionId) => !this.registry.isActionAvailableOnSurface(actionId, request.targetSurfaceId),
+      (actionId) => !availability.isActionAvailableOnSurface(actionId, request.targetSurfaceId),
     );
   }
 }
@@ -394,17 +421,27 @@ export class ExecutionEngine {
       };
     }
     const steps = compiled.steps;
+    // Every availability read for this invocation — the policy shim below, the cross-surface
+    // readiness wait, and the boundary re-check in `executeStep` — goes through this one view. When
+    // the caller supplies none, it is the registry's own default view, so the SPA path is byte-for-
+    // byte unchanged; a server passes `registry.withLiveness(perRequestState)` and this invocation's
+    // liveness is scoped to its principal (SA-DECL-097). B1 is only fully closed because all three
+    // sites read the same view, not raw instance liveness.
+    const availabilityView = request.availability ?? this.options.registry.defaultView;
     const policyInputs: PolicyInputs = {
       ...request,
       currentSurface: request.surfaceId,
       availability: {
         isActionAvailableOnSurface: (actionId, surfaceId) => {
           const declaredTarget = steps.find((step) => step.action.id === actionId)?.targetSurfaceId;
-          // A declared destination may register after navigation; SA-EXEC validates
-          // its liveness and predicates again at the actual cross-surface boundary.
+          // B11 preserved: a declared destination may register after navigation, so plan-time
+          // availability collapses to declared surface membership and SA-EXEC re-validates the
+          // destination's liveness and predicates at the actual cross-surface boundary (the
+          // `executeStep` check below). The refactor only changes the *source* of liveness from raw
+          // instance state to the per-request view; the deferral shape is unchanged.
           return declaredTarget
-            ? this.options.registry.isCapabilityOnSurface(actionId, declaredTarget)
-            : this.options.registry.isActionAvailableOnSurface(actionId, surfaceId);
+            ? availabilityView.isCapabilityOnSurface(actionId, declaredTarget)
+            : availabilityView.isActionAvailableOnSurface(actionId, surfaceId);
         },
       },
     };
@@ -530,6 +567,7 @@ export class ExecutionEngine {
               currentSurface = surface;
             },
             controller,
+            availabilityView,
           );
           // `settled` exists only so undo-all can wait for the in-flight step to stop. The
           // authoritative outcome is taken from `await running` below, so this branch must not
@@ -761,6 +799,7 @@ export class ExecutionEngine {
     source: SurfaceId,
     setSurface: (surface: SurfaceId) => void,
     controller: AbortController,
+    availability: RegistryAvailabilityView,
   ): Promise<ChainExecutionResult["failure"] | undefined> {
     let surface = source;
     if (step.targetSurfaceId && step.targetSurfaceId !== surface) {
@@ -776,6 +815,9 @@ export class ExecutionEngine {
         actionIds: [step.action.id],
         timeoutMs: step.surfaceTimeoutMs,
         signal: controller.signal,
+        // Scope the readiness wait to this invocation's principal (SA-DECL-097). The default
+        // RegistrySurfaceReadiness reads this view; a host-injected readiness may ignore it.
+        availability,
       });
       if (!ready.ok) {
         const code = ready.reason === "timeout" ? "surface_readiness_timeout" : ready.reason;
@@ -813,7 +855,11 @@ export class ExecutionEngine {
         }),
       );
     }
-    if (!this.options.registry.isActionAvailableOnSurface(step.action.id, surface)) {
+    // B11 boundary re-check, now against the same per-request view policy was resolved with: the
+    // plan-time shim deferred a cross-surface step's liveness/predicates to here, and this is where
+    // they are honored for the actual destination surface — scoped to this invocation's principal
+    // (SA-DECL-097), never raw shared instance liveness.
+    if (!availability.isActionAvailableOnSurface(step.action.id, surface)) {
       await this.write("updateStep", () =>
         this.options.ledger.updateStep(recordId, step.stepId, {
           status: "failed",
